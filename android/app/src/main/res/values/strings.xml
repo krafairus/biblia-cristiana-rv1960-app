@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Biblia Cristiana RV 1960</string>
+    <string name="title_activity_main">Biblia Cristiana RV 1960</string>
+    <string name="package_name">com.krafairus.bibliacristiana</string>
+    <string name="custom_url_scheme">com.krafairus.bibliacristiana</string>
+</resources>
