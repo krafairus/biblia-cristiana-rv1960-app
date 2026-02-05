@@ -96,9 +96,3 @@ Este proyecto se distribuye bajo la licencia **GNU General Public License v3.0 (
 **Descargo de Responsabilidad**: Este proyecto se distribuye "tal cual", sin garantías de ningún tipo, expresas o implícitas. El autor no se hace responsable de fallos, pérdida de datos o cualquier otro problema derivado del uso de esta aplicación. Se ofrece de manera gratuita y para fines espirituales y educativos.
 
 ---
-
-## 📂 Repositorio y GitHub
-
-Si vas a subir este proyecto a GitHub, ten en cuenta:
-- **Carpeta `android/`**: No es necesario borrarla por completo, pero **NO** debes subir las subcarpetas de construcción interna como `android/app/build/` o `android/.gradle/` ya que pesan GBs. He creado un archivo `.gitignore` que excluye automáticamente estos archivos pesados.
-- **Node Modules**: No subas la carpeta `node_modules/`.
