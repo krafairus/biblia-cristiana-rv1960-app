@@ -1,3 +1,5 @@
+import { DAILY_VERSES } from './dailyVerses.js';
+
 export class BibleDB {
   constructor() {
     this.bibleData = null;
@@ -58,7 +60,9 @@ export class BibleDB {
   getVerses(bookName, chapterNum) {
     if (!this.bibleData || !this.bibleData[bookName] || !this.bibleData[bookName][chapterNum]) return [];
     const verses = this.bibleData[bookName][chapterNum];
-    return Object.entries(verses).sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+    return Object.entries(verses)
+      .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
+      .map(([num, text]) => [num, this.sanitizeVerseText(text)]);
   }
 
   getPericope(book, chapter, verse) {
@@ -105,7 +109,7 @@ export class BibleDB {
       for (const [chapter, verses] of Object.entries(chapters)) {
         for (const [vNum, text] of Object.entries(verses)) {
           if (text.toLowerCase().includes(q)) {
-            results.push({ book, chapter, vNum, text });
+            results.push({ book, chapter, vNum, text: this.sanitizeVerseText(text) });
           }
         }
       }
@@ -213,7 +217,132 @@ export class BibleDB {
     const chapter = chapters[Math.floor(Math.random() * chapters.length)];
     const verses = Object.keys(this.bibleData[book][chapter]);
     const verse = verses[Math.floor(Math.random() * verses.length)];
-    const text = this.bibleData[book][chapter][verse];
+    const text = this.sanitizeVerseText(this.bibleData[book][chapter][verse]);
     return { book, chapter, verse, text };
+  }
+
+  sanitizeVerseText(text) {
+    if (!text) return "";
+    return text
+      .replace(/,([^\s])/g, ', $1')
+      .replace(/\.([^\s])/g, '. $1')
+      .replace(/;([^\s])/g, '; $1')
+      .replace(/:([^\s])/g, ': $1')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  getVerseOfDay() {
+    if (!this.bibleData) return null;
+
+    const dailyVerses = DAILY_VERSES;
+    if (!dailyVerses) return this.getRandomVerse(); // Fallback por si acaso
+
+    const now = new Date();
+    const day = now.getDate(); // 1-31
+    const year = now.getFullYear();
+    const data = dailyVerses[day];
+
+    if (!data) return this.getRandomVerse();
+
+    // Seleccionar una de las 5 opciones basada en el año
+    const optionIndex = year % 5;
+    const ref = data.options[optionIndex];
+
+    // Parsear la referencia (ej: "Salmos 23:1", "1 Juan 4:19", "Judas 1:1")
+    // El formato esperado es "Nombre de Libro Capitulo:Versiculo"
+    const parts = ref.split(' ');
+    let bookName, chapterVerse;
+
+    if (parts.length === 3) { // Ej: "1 Juan 4:19"
+      bookName = `${parts[0]} ${parts[1]}`;
+      chapterVerse = parts[2];
+    } else { // Ej: "Salmos 23:1"
+      bookName = parts[0];
+      chapterVerse = parts[1];
+    }
+
+    const [chapter, verse] = chapterVerse.split(':');
+
+    // Normalizar nombre de libro para coincidir con la DB si es necesario
+    // La lista del usuario usa "Is." (Isaías), "Sant." (Santiago), etc.
+    // Vamos a intentar buscar el libro que más se parezca o usar una tabla de mapeo básica.
+    const normalizedBook = this.normalizeBookName(bookName);
+
+    if (this.bibleData[normalizedBook] && this.bibleData[normalizedBook][chapter]) {
+      const rawText = this.bibleData[normalizedBook][chapter][verse];
+      if (rawText) {
+        const text = this.sanitizeVerseText(rawText);
+        return {
+          book: normalizedBook,
+          chapter,
+          verse,
+          text,
+          thematic: data.thematic,
+          ref: `${normalizedBook} ${chapter}:${verse}`
+        };
+      }
+    }
+
+    return this.getRandomVerse(); // Fallback si falla el parseo
+  }
+
+  normalizeBookName(name) {
+    const map = {
+      "Josué": "Josué", "Salmo": "Salmos", "Salmos": "Salmos", "Is.": "Isaías", "Isaías": "Isaías",
+      "2 Tim.": "2 Timoteo", "2 Timoteo": "2 Timoteo", "Fil.": "Filipenses", "Filipenses": "Filipenses",
+      "Mateo": "San Mateo", "San Mateo": "San Mateo", "San Marcos": "San Marcos", "San Lucas": "San Lucas", "San Juan": "San Juan",
+      "Hab.": "Habacuc", "Habacuc": "Habacuc", "Jer.": "Jeremías", "Jeremías": "Jeremías",
+      "Sof.": "Sofonías", "Sofonías": "Sofonías", "Luc.": "San Lucas", "Lucas": "San Lucas",
+      "Marcos": "San Marcos", "Heb.": "Hebreos", "Hebreos": "Hebreos", "Santiago": "Santiago", "Sant.": "Santiago",
+      "1 Pedro": "1 Pedro", "2 Pedro": "2 Pedro", "Prov.": "Proverbios", "Proverbios": "Proverbios",
+      "2 Cor.": "2 Corintios", "2 Corintios": "2 Corintios", "1 Cor.": "1 Corintios", "1 Corintios": "1 Corintios",
+      "Lam.": "Lamentaciones", "Lamentaciones": "Lamentaciones", "2 Tes.": "2 Tesalonicenses", "2 Tesalonicenses": "2 Tesalonicenses",
+      "1 Tes.": "1 Tesalonicenses", "1 Tesalonicenses": "1 Tesalonicenses", "Deut.": "Deuteronomio", "Deuteronomio": "Deuteronomio",
+      "1 Juan": "1 Juan", "2 Juan": "2 Juan", "3 Juan": "3 Juan", "Ezeq.": "Ezequiel", "Ezequiel": "Ezequiel",
+      "Gál.": "Gálatas", "Gálatas": "Gálatas", "Gal.": "Gálatas", "Miq.": "Miqueas", "Miqueas": "Miqueas",
+      "Job": "Job", "Núm.": "Números", "Números": "Números", "Éxodo": "Éxodo", "Col.": "Colosenses", "Colosenses": "Colosenses"
+    };
+
+    if (map[name]) return map[name];
+
+    const clean = name.replace('.', '').replace('San ', '').replace('S. ', '').trim();
+    if (map[clean]) return map[clean];
+
+    const books = this.getBooks();
+    return books.find(b => b.toLowerCase().startsWith(clean.toLowerCase())) || name;
+  }
+
+  // Exportar todos los datos del usuario
+  exportUserData() {
+    return {
+      version: "1.0",
+      export_date: new Date().toISOString(),
+      app_version: "1.2.0",
+      data: {
+        favorites: this.favorites,
+        notes: this.notes,
+        highlights: this.highlights,
+        settings: this.settings
+      }
+    };
+  }
+
+  // Importar datos del usuario
+  importUserData(backupData) {
+    if (!backupData.version || !backupData.data) {
+      throw new Error("Formato de backup inválido");
+    }
+
+    this.favorites = backupData.data.favorites || [];
+    this.notes = backupData.data.notes || [];
+    this.highlights = backupData.data.highlights || [];
+    this.settings = { ...this.settings, ...backupData.data.settings };
+
+    // Guardar en localStorage
+    localStorage.setItem('bible_favorites', JSON.stringify(this.favorites));
+    localStorage.setItem('bible_notes', JSON.stringify(this.notes));
+    localStorage.setItem('bible_highlights', JSON.stringify(this.highlights));
+    localStorage.setItem('bible_settings', JSON.stringify(this.settings));
   }
 }

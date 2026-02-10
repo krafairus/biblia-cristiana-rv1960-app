@@ -1,5 +1,8 @@
 import '../css/style.css';
 import { BibleDB } from './db.js';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { Zip } from 'capa-zip';
+import { FilePicker } from '@capawesome/capacitor-file-picker';
 
 const createIcon = (name) => `<i data-lucide="${name}"></i>`;
 
@@ -17,6 +20,11 @@ class App {
     this.dictionary = [];
     this.isSpeaking = false;
     this.aboutClickCount = 0;
+    this.appVersion = '1.1.9';
+    this.repo = 'krafairus/biblia-cristiana-rv1960-app';
+    this.currentHighlightFilter = 'all';
+    this.searchFilter = 'all';
+    this.searchBook = null;
 
     this.init();
   }
@@ -42,19 +50,77 @@ class App {
   async init() {
     const loaded = await this.db.init();
     if (loaded) {
-      this.applyTheme(this.db.settings.theme || 'classic');
+      this.migrateThemes();
+      this.applyTheme();
+      this.watchSystemTheme();
       this.renderHome();
+      this.checkForUpdates(true);
     } else {
       this.appEl.innerHTML = '<div class="error" style="height: 100vh; display: flex; align-items: center; justify-content: center; color: white;">Error al cargar la Biblia. Por favor recarga.</div>';
     }
   }
 
-  applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
-    this.db.setTheme(theme);
+  migrateThemes() {
+    const s = this.db.settings;
+    if (!s.theme_style) {
+      // Migración de versión anterior
+      const oldTheme = s.theme || 'classic';
+      if (oldTheme === 'dark') {
+        s.theme_style = 'classic';
+        s.theme_mode = 'dark';
+      } else if (oldTheme === 'light') {
+        s.theme_style = 'classic';
+        s.theme_mode = 'light';
+      } else if (oldTheme === 'floral') {
+        s.theme_style = 'floral';
+        s.theme_mode = 'light';
+      } else if (oldTheme === 'pastel-blue') {
+        s.theme_style = 'pastel-blue';
+        s.theme_mode = 'light';
+      } else if (oldTheme === 'ink') {
+        s.theme_style = 'ink';
+        s.theme_mode = 'light';
+      } else {
+        s.theme_style = 'classic';
+        s.theme_mode = 'light';
+      }
+      if (s.system_theme === undefined) s.system_theme = false;
+      this.db.saveSettings();
+    }
+  }
+
+  applyTheme(style, mode) {
+    const s = this.db.settings;
+    if (style) s.theme_style = style;
+    if (mode) s.theme_mode = mode;
+
+    // Si la sincronización con el sistema está activa, sobreescribimos el modo temporalmente
+    let finalMode = s.theme_mode || 'light';
+    if (s.system_theme) {
+      finalMode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+
+    document.documentElement.setAttribute('data-style', s.theme_style);
+    document.documentElement.setAttribute('data-mode', finalMode);
+
+    this.db.saveSettings();
     if (this.currentView === 'settings') {
       this.renderSettings();
     }
+  }
+
+  toggleMode() {
+    const s = this.db.settings;
+    const newMode = s.theme_mode === 'light' ? 'dark' : 'light';
+    this.applyTheme(null, newMode);
+  }
+
+  watchSystemTheme() {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+      if (this.db.settings.system_theme) {
+        this.applyTheme();
+      }
+    });
   }
 
   refreshIcons() {
@@ -98,8 +164,10 @@ class App {
     const menuItems = [
       { text: "Antiguo T.", icon: "book", target: "old" },
       { text: "Nuevo T.", icon: "book-open", target: "new" },
+      { text: "Buscar", icon: "search", target: "search" },
       { text: "Última L.", icon: "history", target: "last" },
       { text: "Vr. de hoy", icon: "sun", target: "vod" },
+      { text: "Devocional", icon: "coffee", target: "devotional" },
       { text: "Favoritos", icon: "heart", target: "favorites" },
       { text: "Notas", icon: "sticky-note", target: "notes" },
       { text: "Marcadores", icon: "highlighter", target: "highlights" },
@@ -107,13 +175,29 @@ class App {
       { text: "Ajustes", icon: "settings", target: "settings" }
     ];
 
+    const vod = this.db.getVerseOfDay();
+    // Usar la semilla del día para el fondo aleatorio (para que sea el mismo todo el día)
+    const seed = new Date().getFullYear() * 10000 + (new Date().getMonth() + 1) * 100 + new Date().getDate();
+    const bgNum = (seed % 11) + 1;
+
     const html = `
       <header>
         <h1 style="font-family: 'Playfair Display', serif;">Biblia Cristiana</h1>
         <div style="font-size: 0.8rem; opacity: 0.5; color: var(--accent); margin-right: auto; padding-left: 0.5rem;">RV 1960</div>
-        <button class="btn-icon" onclick="window.app.navigate('settings')">${createIcon('settings')}</button>
+        <button class="btn-icon" onclick="window.app.toggleMode()" id="theme-toggle-btn">
+          ${createIcon(this.db.settings.theme_mode === 'dark' ? 'sun' : 'moon')}
+        </button>
       </header>
       <div class="view-container animate-entrance">
+        ${vod ? `
+          <div class="home-vod-card" onclick="window.pendingVerseScroll = '${vod.verse}'; window.app.renderReader('${vod.book}', '${vod.chapter}')"
+               style="background-image: url('/img/bg-verse-${bgNum}.png')">
+            <div class="vod-thematic">${vod.thematic}</div>
+            <div class="vod-text">"${vod.text}"</div>
+            <div class="vod-ref">${vod.book} ${vod.chapter}:${vod.verse}</div>
+            <div style="position: absolute; bottom: 1rem; right: 1rem; opacity: 0.5; font-size: 0.7rem; font-weight: 700;">VERSÍCULO DEL DÍA</div>
+          </div>
+        ` : ''}
         <div class="home-grid">
           ${menuItems.map(item => `
             <div class="premium-card" onclick="window.app.navigate('${item.target}')">
@@ -141,6 +225,12 @@ class App {
     this.clearHighlightSelection(); // Limpiar selección de highlights al navegar
     this.closeShareModal(); // Asegurar que modales también se cierren
 
+    // Resetear filtros de búsqueda al salir de la vista de búsqueda
+    if (target !== 'search') {
+      this.searchFilter = 'all';
+      this.searchBook = null;
+    }
+
     if (target === 'home') this.renderHome();
     else if (target === 'old') this.renderBookList('old');
     else if (target === 'new') this.renderBookList('new');
@@ -152,6 +242,7 @@ class App {
     else if (target === 'about') this.renderAbout();
     else if (target === 'settings') this.renderSettings();
     else if (target === 'vod') this.renderVerseOfDay();
+    else if (target === 'devotional') this.renderDevotional();
     else if (target === 'last') {
       const { last_book, last_chapter } = this.db.settings;
       this.renderReader(last_book, last_chapter);
@@ -486,23 +577,36 @@ class App {
       </header>
       <div class="view-container animate-entrance">
         <div style="margin-bottom: 2rem;">
-          <h3 style="margin-bottom: 1.25rem; opacity: 0.6; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">Paleta de Colores</h3>
-          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+          <h3 style="margin-bottom: 1.25rem; opacity: 0.6; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">Paleta de Colores (Estilo)</h3>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
             ${[
-        { id: 'classic', name: 'Biblia Clásica', color: '#f4ece1' },
-        { id: 'light', name: 'Modo Claro', color: '#ffffff' },
-        { id: 'dark', name: 'Modo Oscuro', color: '#0f172a' },
+        { id: 'classic', name: 'Estilo Clásico', color: '#f4ece1' },
         { id: 'floral', name: 'Estilo Floral', color: '#fff5f7' },
         { id: 'pastel-blue', name: 'Azul Pastel', color: '#ebf5ff' },
         { id: 'ink', name: 'Modo Tinta', color: '#000000' }
       ].map(t => `
               <div class="premium-card" onclick="window.app.applyTheme('${t.id}')" 
-                   style="padding: 1rem; flex-direction: row; gap: 0.75rem; border: ${this.db.settings.theme === t.id ? '2px solid var(--accent)' : '1px solid var(--glass-border)'}">
+                   style="padding: 1rem; flex-direction: row; gap: 0.75rem; border: ${this.db.settings.theme_style === t.id ? '2px solid var(--accent)' : '1px solid var(--glass-border)'}">
                 <div class="color-preview" style="background: ${t.color}; border: 1px solid rgba(0,0,0,0.1)"></div>
                 <span style="font-size: 0.9rem; font-weight: 600;">${t.name}</span>
               </div>
             `).join('')}
           </div>
+
+          <!-- Sincronización con el sistema -->
+          <label class="premium-card" style="padding: 1.25rem; flex-direction: row; justify-content: space-between; align-items: center; cursor: pointer; display: flex !important;">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+              <div style="color: var(--accent);">${createIcon('refresh-cw')}</div>
+              <div style="display: flex; flex-direction: column; text-align: left;">
+                <span style="font-size: 0.9rem; font-weight: 700;">Sincronizar con el sistema</span>
+                <span style="font-size: 0.8rem; opacity: 0.6;">Sigue el modo claro/oscuro de Android</span>
+              </div>
+            </div>
+            <div class="switch">
+              <input type="checkbox" ${this.db.settings.system_theme ? 'checked' : ''} onchange="window.app.toggleSystemTheme(this.checked)">
+              <span class="slider round"></span>
+            </div>
+          </label>
         </div>
 
         <div style="margin-bottom: 2rem;">
@@ -537,9 +641,136 @@ class App {
             </label>
           </div>
         </div>
+
+        <div style="margin-bottom: 2rem;">
+          <h3 style="margin-bottom: 1.25rem; opacity: 0.6; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">Actualizaciones</h3>
+          <div class="premium-card" onclick="window.app.checkForUpdates()" style="padding: 1.25rem; flex-direction: row; justify-content: space-between; align-items: center;">
+              <div style="display: flex; align-items: center; gap: 1rem;">
+                <div style="color: var(--accent);">${createIcon('download-cloud')}</div>
+                <div style="display: flex; flex-direction: column;">
+                  <span style="font-size: 0.9rem; font-weight: 700;">Buscar Actualizaciones</span>
+                  <span style="font-size: 0.8rem; opacity: 0.6;">Versión actual: v${this.appVersion}</span>
+                </div>
+              </div>
+              <div style="opacity: 0.4;">${createIcon('chevron-right')}</div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 2rem;">
+          <h3 style="margin-bottom: 1.25rem; opacity: 0.6; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">Respaldo de Datos</h3>
+          
+          <div class="premium-card" onclick="window.app.exportUserData()" style="padding: 1.25rem; flex-direction: row; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+              <div style="color: var(--accent);">${createIcon('download')}</div>
+              <div style="display: flex; flex-direction: column;">
+                <span style="font-size: 0.9rem; font-weight: 700;">Exportar Datos</span>
+                <span style="font-size: 0.8rem; opacity: 0.6;">Guardar copia de seguridad (JSON)</span>
+              </div>
+            </div>
+            <div style="opacity: 0.4;">${createIcon('chevron-right')}</div>
+          </div>
+          
+          <div class="premium-card" onclick="window.app.importUserData()" style="padding: 1.25rem; flex-direction: row; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+              <div style="color: var(--accent);">${createIcon('upload')}</div>
+              <div style="display: flex; flex-direction: column;">
+                <span style="font-size: 0.9rem; font-weight: 700;">Importar Datos</span>
+                <span style="font-size: 0.8rem; opacity: 0.6;">Restaurar desde archivo (JSON)</span>
+              </div>
+            </div>
+            <div style="opacity: 0.4;">${createIcon('chevron-right')}</div>
+          </div>
+        </div>
       </div>
     `;
     this.render(html);
+  }
+
+  toggleSystemTheme(active) {
+    this.db.settings.system_theme = active;
+    this.db.saveSettings();
+    this.applyTheme();
+  }
+
+  toggleVerseNumbers(active) {
+    this.db.settings.skip_verse_numbers = !active;
+    this.db.saveSettings();
+    this.renderSettings();
+  }
+
+  async checkForUpdates(silent = false) {
+    if (!silent) this.showToast("Buscando actualizaciones...");
+    try {
+      const resp = await fetch(`https://api.github.com/repos/${this.repo}/releases/latest`);
+      if (!resp.ok) throw new Error('Error buscando versión');
+      const data = await resp.json();
+      const latestVersion = data.tag_name.replace('v', '');
+      const currentVersion = this.appVersion;
+
+      if (this.compareVersions(latestVersion, currentVersion) > 0) {
+        // Encontrar APK
+        const asset = data.assets.find(a => a.name.endsWith('.apk'));
+        if (asset) {
+          this.confirmUpdate(latestVersion, asset.browser_download_url);
+        } else {
+          if (!silent) this.showToast("Nueva versión detectada pero sin APK disponible.");
+        }
+      } else {
+        if (!silent) this.showToast("Ya tienes la última versión.");
+      }
+    } catch (e) {
+      console.error(e);
+      if (!silent) this.showToast("Error al buscar actualizaciones.");
+    }
+  }
+
+  compareVersions(v1, v2) {
+    const p1 = v1.split('.').map(Number);
+    const p2 = v2.split('.').map(Number);
+    for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+      const n1 = p1[i] || 0;
+      const n2 = p2[i] || 0;
+      if (n1 > n2) return 1;
+      if (n1 < n2) return -1;
+    }
+    return 0;
+  }
+
+  confirmUpdate(version, url) {
+    this.openConfirmModal(
+      "Actualización Disponible",
+      `La versión v${version} está disponible. ¿Deseas descargarla e instalarla?`,
+      () => this.downloadAndInstall(url)
+    );
+    // Cambiar estilo del botón de confirmar
+    setTimeout(() => {
+      const btn = document.querySelector('#confirm-btn-ok');
+      if (btn) {
+        btn.innerText = "Descargar";
+        btn.style.backgroundColor = "var(--accent)";
+      }
+    }, 100);
+  }
+
+  async downloadAndInstall(url) {
+    this.showToast("Iniciando descarga en segundo plano...");
+
+    if (window.ApkUpdater) {
+      window.ApkUpdater.download(url, {
+        onDownloadProgress: (e) => {
+          console.log(`Progreso: ${e.progress}%`);
+        }
+      }, () => {
+        this.showToast("Descarga lista. Instalando...");
+        window.ApkUpdater.install();
+      }, (err) => {
+        console.error(err);
+        this.showToast("Error: " + (err.message || "Fallo en descarga"));
+      });
+    } else {
+      alert("Plugin de actualización no activo. Abriendo navegador...");
+      window.open(url, '_blank');
+    }
   }
 
   applyVoice(index, name) {
@@ -686,7 +917,7 @@ class App {
       <div class="view-container animate-entrance">
         ${favs.length === 0 ? '<p style="text-align: center; opacity: 0.5;">No tienes favoritos aún.</p>' :
         favs.map((f, index) => `
-            <div class="premium-card fav-card" 
+            <div class="premium-card fav-card fav-card-item" 
                  style="margin-bottom: 1.25rem; border-left: 4px solid var(--accent); align-items: flex-start; text-align: left;"
                  onclick="window.app.toggleFavoriteSelection(${index})"
                  ondblclick="window.pendingVerseScroll='${f.verse}'; window.app.renderReader('${f.book}', '${f.chapter}')">
@@ -801,16 +1032,48 @@ class App {
 
   renderHighlights() {
     this.currentView = 'highlights';
-    const list = this.db.highlights;
+    let list = this.db.highlights;
+
+    // Aplicar filtro si no es 'all'
+    if (this.currentHighlightFilter !== 'all') {
+      list = list.filter(h => h.color === this.currentHighlightFilter);
+    }
+
+    const colors = ['#fef3c7', '#dcfce7', '#dbeafe', '#fae8ff', '#fee2e2', '#ffedd5', '#f3f4f6'];
+
     const html = `
       <header>
         <button class="btn-icon" onclick="window.app.navigate('home')">${createIcon('chevron-left')}</button>
         <h1>Marcadores</h1>
       </header>
       <div class="view-container animate-entrance">
-        ${list.length === 0 ? '<p style="text-align: center; opacity: 0.5;">No tienes marcadores aún.</p>' :
-        list.map((h, index) => `
-            <div class="premium-card highlight-card" style="margin-bottom: 1rem; border-left: 4px solid ${h.color};" onclick="window.app.toggleHighlightSelection(${index})">
+        <!-- Barra de filtros -->
+        <div style="display: flex; gap: 0.5rem; overflow-x: auto; padding: 0 0 1.5rem 0; margin-bottom: 0.5rem; scrollbar-width: none;">
+          <button onclick="window.app.applyHighlightFilter('all')" 
+                  style="flex-shrink: 0; padding: 0.5rem 1rem; border-radius: 20px; border: 1px solid ${this.currentHighlightFilter === 'all' ? 'var(--accent)' : 'var(--glass-border)'}; 
+                         background: ${this.currentHighlightFilter === 'all' ? 'var(--accent)' : 'var(--card-bg)'}; 
+                         color: ${this.currentHighlightFilter === 'all' ? 'white' : 'var(--text-main)'}; font-size: 0.85rem; font-weight: 600;">
+            Todos
+          </button>
+          ${colors.map(c => `
+            <button onclick="window.app.applyHighlightFilter('${c}')" 
+                    style="flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; background: ${c}; 
+                           border: ${this.currentHighlightFilter === c ? '3px solid var(--accent)' : '1px solid #ccc'}; padding: 0;">
+            </button>
+          `).join('')}
+        </div>
+
+        ${list.length === 0 ? `
+          <div style="text-align: center; padding: 3rem 1rem; opacity: 0.5;">
+            ${createIcon('highlighter')}
+            <p style="margin-top: 1rem;">No hay marcadores ${this.currentHighlightFilter === 'all' ? '' : 'de este color'}.</p>
+          </div>
+        ` :
+        list.map((h, index) => {
+          // Encontrar el índice original en this.db.highlights para que las acciones (borrar, ir) funcionen correctamente
+          const originalIndex = this.db.highlights.findIndex(orig => orig === h);
+          return `
+            <div class="premium-card highlight-card" style="margin-bottom: 1rem; border-left: 8px solid ${h.color};" onclick="window.app.toggleHighlightSelection(${originalIndex})">
                 <div style="flex: 1;">
                      <div style="color: var(--accent); font-size: 0.9rem; font-weight: 700; margin-bottom: 0.25rem;">
                         ${h.book} ${h.chapter}:${h.verse}
@@ -818,7 +1081,8 @@ class App {
                      <div style="font-size: 1rem; opacity: 0.9;">${h.text}</div>
                 </div>
             </div>
-        `).join('')}
+          `;
+        }).join('')}
       </div>
       <!-- Barra flotante para marcadores -->
       <div id="highlight-selection-bar" class="floating-toolbar animate-entrance" style="display: none;">
@@ -836,6 +1100,12 @@ class App {
       </div>
     `;
     this.render(html);
+  }
+
+  applyHighlightFilter(color) {
+    this.currentHighlightFilter = color;
+    this.clearHighlightSelection();
+    this.renderHighlights();
   }
 
   toggleHighlightSelection(index) {
@@ -948,25 +1218,99 @@ class App {
         <h1>Buscador</h1>
       </header>
       <div class="view-container animate-entrance">
-        <input type="text" id="search-input" placeholder="¿Qué estás buscando?..." class="search-box">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;">
+          <input type="text" id="search-input" placeholder="¿Qué estás buscando?..." class="search-box" style="flex: 1; margin-bottom: 0;">
+          <button class="btn-icon" onclick="window.app.openSearchBookModal()" 
+                  style="background: var(--card-bg); border: 1px solid var(--glass-border); border-radius: 14px; width: 50px; height: 50px; flex-shrink: 0; position: relative; display: flex; align-items: center; justify-content: center; color: var(--text-main);">
+            ${createIcon('filter')}
+            ${this.searchBook ? `<div style="position: absolute; top: 8px; right: 8px; background: var(--accent); width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--bg-color);"></div>` : ''}
+          </button>
+        </div>
+        ${this.searchBook ? `
+          <div style="margin-top: -1rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; opacity: 0.8;">
+            <span style="color: var(--accent); font-weight: 700;">Filtrado por:</span> ${this.searchBook}
+            <button onclick="window.app.setSearchFilter('all')" style="background: none; border: none; color: #ef4444; font-size: 0.75rem; text-decoration: underline; padding: 0; cursor: pointer;">Limpiar</button>
+          </div>
+        ` : ''}
         <div id="search-results">
+        </div>
+      </div>
+
+      <!-- Modal de Selección de Libro para Búsqueda -->
+      <div id="search-book-modal" class="modal-overlay">
+        <div class="modal-box" style="padding: 1.5rem; display: flex; flex-direction: column; max-height: 85vh;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 class="modal-title" style="font-size: 1.2rem; margin-bottom: 0;">Filtrar por Libro</h3>
+            <button class="btn-icon" onclick="window.app.closeSearchBookModal()" style="color: var(--text-main); opacity: 0.6;">${createIcon('x')}</button>
+          </div>
+          <p class="modal-subtitle" style="margin-bottom: 1rem;">Selecciona el libro para filtrar la búsqueda</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 0.5rem; overflow-y: auto; flex: 1; padding-right: 0.5rem;">
+            <!-- Opción para buscar en todo -->
+            <div class="premium-card" onclick="window.app.setSearchFilter('all')" 
+                 style="padding: 1rem; flex-direction: row; justify-content: center; background: var(--accent-soft); border: 1px dashed var(--accent); min-height: auto; flex-shrink: 0;">
+              <span style="font-weight: 700; color: var(--accent);">Buscar en Todo</span>
+            </div>
+
+            ${this.db.getBooks().map(book => `
+              <div class="premium-card" onclick="window.app.selectSearchBook('${book.replace(/'/g, "\\'")}')" 
+                   style="padding: 1rem; flex-direction: row; justify-content: space-between; min-height: auto; flex-shrink: 0;">
+                <span style="font-weight: 600; text-align: left;">${book}</span>
+                <div style="color: var(--accent); opacity: 0.5;">${createIcon('chevron-right')}</div>
+              </div>
+            `).join('')}
+          </div>
+          <button class="modal-btn secondary" style="width: 100%; margin-top: 1.25rem;" onclick="window.app.closeSearchBookModal()">Cancelar</button>
         </div>
       </div>
     `;
     this.render(html);
-    document.querySelector('#search-input').addEventListener('input', (e) => {
+    const input = document.querySelector('#search-input');
+    input.addEventListener('input', (e) => {
       const query = e.target.value;
       if (query.length > 2) this.performSearch(query);
     });
+    input.focus();
+  }
+
+  setSearchFilter(filter) {
+    this.searchFilter = filter;
+    if (filter === 'book') {
+      this.openSearchBookModal();
+    } else {
+      this.searchBook = null;
+      this.renderSearch();
+    }
+  }
+
+  openSearchBookModal() {
+    const modal = document.querySelector('#search-book-modal');
+    if (modal) modal.classList.add('active');
+  }
+
+  closeSearchBookModal() {
+    const modal = document.querySelector('#search-book-modal');
+    if (modal) modal.classList.remove('active');
+  }
+
+  selectSearchBook(book) {
+    this.searchBook = book;
+    this.closeSearchBookModal();
+    this.renderSearch();
   }
 
   performSearch(query) {
-    const results = this.db.search(query);
+    let results = this.db.search(query);
+    if (this.searchFilter === 'book' && this.searchBook) {
+      results = results.filter(r => r.book === this.searchBook);
+    }
+
     const resultsEl = document.querySelector('#search-results');
     resultsEl.innerHTML = `
       <p style="margin-bottom: 1.25rem; opacity: 0.5; font-size: 0.9rem;">${results.length} coincidencias encontradas</p>
       ${results.map(r => `
-        <div class="premium-card" style="margin-bottom: 1rem; align-items: flex-start; text-align: left;" onclick="window.app.renderReader('${r.book}', '${r.chapter}')">
+        <div class="premium-card" style="margin-bottom: 1rem; align-items: flex-start; text-align: left;" 
+             onclick="window.pendingVerseScroll = '${r.vNum}'; window.app.renderReader('${r.book}', '${r.chapter}')">
           <div style="color: var(--accent); font-size: 0.85rem; margin-bottom: 0.4rem; font-weight: 700;">${r.book} ${r.chapter}:${r.vNum}</div>
           <div style="font-size: 1rem; line-height: 1.5;">${r.text}</div>
         </div>
@@ -1061,10 +1405,17 @@ class App {
 
         <div style="display: flex; flex-direction: column; gap: 1.25rem;">
           <div style="display: flex; flex-direction: column; gap: 0.75rem; align-items: center;">
-            <p style="font-size: 0.9rem; opacity: 0.7;">Desarrollado por <b onclick="window.app.handleAboutClick()" style="cursor: pointer; color: var(--accent);">krafairus</b></p>
-            <a href="https://github.com/krafairus/biblia-cristiana-rv1960-app" target="_blank" class="about-action-btn">
-              ${createIcon('github')} Ver Código en GitHub
-            </a>
+            <p style="font-size: 0.95rem; opacity: 0.8;">Desarrollado por <b style="color: var(--text-main);">Life Code Studios</b></p>
+            <p style="font-size: 0.85rem; opacity: 0.6; margin-top: -0.5rem;">Developer: <span onclick="window.app.handleAboutClick()" style="cursor: pointer; color: var(--accent); font-weight: 700;">krafairus</span></p>
+            
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: center; margin-top: 0.5rem;">
+              <a href="https://www.facebook.com/profile.php?id=61587882503975" target="_blank" class="about-action-btn" style="background: #1877F2; color: white; border: none;">
+                ${createIcon('facebook')} Facebook
+              </a>
+              <a href="https://github.com/krafairus/biblia-cristiana-rv1960-app" target="_blank" class="about-action-btn">
+                ${createIcon('github')} GitHub
+              </a>
+            </div>
           </div>
 
           <div style="height: 1px; background: var(--glass-border); width: 40%; margin: 0.5rem auto;"></div>
@@ -1084,6 +1435,15 @@ class App {
             Y para todo aquel que busque en las Escrituras el camino hacia la verdad y la vida eterna.
           </p>
 
+          <!-- Donaciones -->
+          <div style="margin-top: 2rem; padding: 1.5rem; background: linear-gradient(135deg, rgba(41, 171, 224, 0.1), rgba(255, 94, 94, 0.1)); border-radius: 16px; border: 1px solid var(--glass-border); text-align: center;">
+              <h4 style="color: var(--accent); margin-bottom: 0.5rem;">Apoya este proyecto</h4>
+              <p style="font-size: 0.9rem; opacity: 0.8; margin-bottom: 1rem;">Tu donación nos ayuda a seguir mejorando y creando más herramientas gratuitas.</p>
+              <a href="https://ko-fi.com/lifecodestudios/goal?g=0" target="_blank" class="btn-primary" style="background: #29abe0; color: white; display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; justify-content: center; width: auto; padding: 0.75rem 1.5rem; border-radius: 12px;">
+                  ${createIcon('coffee')} Donar en Ko-fi
+              </a>
+          </div>
+
           <div style="margin-top: 2rem; padding: 1.5rem; background: var(--card-bg); border-radius: 16px; font-size: 0.85rem; text-align: left; border: 1px solid var(--glass-border);">
             <h4 style="color: var(--accent); margin-bottom: 0.5rem;">Licencia y Garantía</h4>
             <p style="opacity: 0.7; margin-bottom: 0.75rem;">Esta aplicación se distribuye bajo la <b>Licencia Pública General de GNU v3.0 (GPLv3)</b>.</p>
@@ -1095,7 +1455,7 @@ class App {
           </div>
         </div>
 
-        <p style="font-size: 0.8rem; opacity: 0.3; margin-top: 1rem;">VERSIÓN 1.1.5</p>
+        <p style="font-size: 0.8rem; opacity: 0.3; margin-top: 1rem;">VERSIÓN 1.2.0</p>
       </div>
     `;
     this.render(html);
@@ -1120,7 +1480,7 @@ class App {
         <div style="width: 100%;">
           <p style="font-size: 0.8rem; opacity: 0.6; margin-bottom: 0.75rem; font-weight: 600; text-transform: uppercase;">Seleccionar Fondo</p>
           <div id="bg-selector" style="display: flex; overflow-x: auto; gap: 0.75rem; padding-bottom: 0.5rem; scrollbar-width: none;">
-            ${[1, 2, 3, 4, 5].map(i => `
+            ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(i => `
               <div class="bg-thumb" onclick="window.app.changeVodBg(${i})" 
                    style="min-width: 60px; height: 60px; border-radius: 12px; background-image: url('/img/bg-verse-${i}.png'); background-size: cover; border: 2px solid var(--glass-border); flex-shrink: 0;">
               </div>
@@ -1166,7 +1526,7 @@ class App {
         <div style="width: 100%;">
           <p style="font-size: 0.8rem; opacity: 0.6; margin-bottom: 0.75rem; font-weight: 600; text-transform: uppercase;">Seleccionar Fondo</p>
           <div id="bg-selector" style="display: flex; overflow-x: auto; gap: 0.75rem; padding-bottom: 0.5rem; scrollbar-width: none;">
-            ${[1, 2, 3, 4, 5].map(i => `
+            ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(i => `
               <div class="bg-thumb" onclick="window.app.changeVodBg(${i})" 
                    style="min-width: 60px; height: 60px; border-radius: 12px; background-image: url('/img/bg-verse-${i}.png'); background-size: cover; border: 2px solid var(--glass-border); flex-shrink: 0;">
               </div>
@@ -1234,9 +1594,13 @@ class App {
 
   async loadDailyVerse() {
     try {
-      const v = this.db.getRandomVerse();
+      const v = this.db.getVerseOfDay();
       if (!v) throw new Error('No Bible data');
-      this.currentVod = { text: v.text, ref: `${v.book} ${v.chapter}:${v.verse}` };
+      this.currentVod = {
+        text: v.text,
+        ref: `${v.book} ${v.chapter}:${v.verse}`,
+        thematic: v.thematic
+      };
       this.updateVodUI();
     } catch (e) {
       console.error("Error loading VOD:", e);
@@ -1251,6 +1615,7 @@ class App {
     if (!card || !contentEl) return;
     card.style.backgroundImage = `url('${this.currentVodBg}')`;
     contentEl.innerHTML = `
+      <div style="font-weight: 800; letter-spacing: 2px; text-transform: uppercase; font-size: 0.8rem; margin-bottom: 0.5rem; opacity: 0.9;">${this.currentVod.thematic || ''}</div>
       <p style="font-size: 1.4rem; font-style: italic; line-height: 1.6; margin-bottom: 1.5rem; font-family: 'Playfair Display', serif;">
         "${this.currentVod.text}"
       </p>
@@ -1683,6 +2048,292 @@ class App {
 
   cleanText(text) {
     return text.replace(/<[^>]*>?/gm, ''); // Elimina tags HTML si los hubiera
+  }
+
+  async renderDevotional() {
+    this.currentView = 'devotional';
+    const html = `
+      <header>
+        <button class="btn-icon" onclick="window.app.renderHome()">${createIcon('arrow-left')}</button>
+        <h1>Devocional Semanal</h1>
+        <button class="btn-icon" onclick="window.app.renderDevotionalHistory()">${createIcon('history')}</button>
+      </header>
+      <div class="view-container animate-entrance" style="padding-bottom: 2rem;">
+        <div id="devotional-content" style="display: flex; flex-direction: column; gap: 1.5rem; width: 100%; max-width: 800px; margin: 0 auto;">
+          <div style="text-align: center; padding: 2rem; color: var(--text-main); opacity: 0.7;">
+            <div class="spinner"></div>
+            <p style="margin-top: 1rem;">Cargando devocional...</p>
+          </div>
+        </div>
+      </div>
+    `;
+    this.render(html);
+    this.loadDevotionalData();
+  }
+
+  async loadDevotionalData() {
+    const container = document.getElementById('devotional-content');
+    if (!navigator.onLine) {
+      container.innerHTML = `
+            <div class="error-state" style="text-align: center; padding: 3rem 1rem;">
+                <div style="font-size: 3rem; color: var(--accent); margin-bottom: 1rem;">${createIcon('wifi-off')}</div>
+                <h3 style="margin-bottom: 0.5rem;">Sin Conexión</h3>
+                <p style="opacity: 0.7; margin-bottom: 1.5rem;">Revise su conexión a internet y pruebe nuevamente.</p>
+                <button class="btn-primary" onclick="window.app.loadDevotionalData()">Reintentar</button>
+            </div>
+        `;
+      this.refreshIcons();
+      return;
+    }
+
+    try {
+      const response = await fetch('https://dataconnect-kohl.vercel.app/biblia-cristiana-rv1960-app/devocional-last.json?' + new Date().getTime());
+      if (!response.ok) throw new Error("No se pudo cargar el devocional");
+
+      const data = await response.json();
+      this.renderDevotionalView(data, false);
+
+    } catch (e) {
+      console.error(e);
+      container.innerHTML = `
+            <div class="error-state" style="text-align: center; padding: 3rem 1rem;">
+                <div style="font-size: 3rem; color: #ef4444; margin-bottom: 1rem;">${createIcon('alert-circle')}</div>
+                <h3 style="margin-bottom: 0.5rem;">Error al Cargar</h3>
+                <p style="opacity: 0.7; margin-bottom: 1.5rem;">Revise su conexión a internet y pruebe nuevamente.<br>Si el error persiste, puede reportarlo en GitHub.</p>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem; align-items: center;">
+                  <button class="btn-primary" onclick="window.app.loadDevotionalData()">Reintentar</button>
+                  <button class="btn-secondary" onclick="window.open('https://github.com/${this.repo}/issues', '_blank')" style="background: var(--card-bg); color: var(--text-main); border: 1px solid var(--glass-border); padding: 0.8rem 1.5rem; border-radius: 12px; font-weight: 700; cursor: pointer;">
+                    ${createIcon('github')} Reportar en GitHub
+                  </button>
+                </div>
+            </div>
+        `;
+      this.refreshIcons();
+    }
+  }
+
+  async renderDevotionalHistory() {
+    this.currentView = 'devotional-history';
+    const html = `
+      <header>
+        <button class="btn-icon" onclick="window.app.renderDevotional()">${createIcon('arrow-left')}</button>
+        <h1>Historial</h1>
+      </header>
+      <div class="view-container animate-entrance">
+         <div id="history-content" style="padding: 1rem; display: flex; flex-direction: column; gap: 1rem;">
+            <div style="text-align: center; padding: 2rem; color: var(--text-main); opacity: 0.7;">
+              <div class="spinner"></div>
+              <p style="margin-top: 1rem;">Cargando historial...</p>
+            </div>
+         </div>
+      </div>
+      `;
+    this.render(html);
+
+    const container = document.getElementById('history-content');
+    try {
+      // Asumimos que existirá este archivo JSON con un array de {titulo, fecha, file}
+      const response = await fetch('https://dataconnect-kohl.vercel.app/biblia-cristiana-rv1960-app/devocional-index.json?' + new Date().getTime());
+
+      let items = [];
+      if (response.ok) {
+        items = await response.json();
+      } else {
+        throw new Error("No se pudo cargar el historial.");
+      }
+
+      if (items.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 2rem; opacity: 0.6;">No hay devocionales anteriores.</div>';
+        return;
+      }
+
+      container.innerHTML = items.reverse().map(item => `
+            <div class="premium-card" onclick="window.app.loadDevotionalFromHistory('${item.file}')" style="padding: 1rem; flex-direction: row; align-items: center; justify-content: space-between;">
+                <div>
+                    <h3 style="font-size: 1rem; margin-bottom: 0.25rem;">${item.titulo}</h3>
+                    <span style="font-size: 0.8rem; opacity: 0.6;">${item.fecha || ''}</span>
+                </div>
+                <div style="opacity: 0.4;">${createIcon('chevron-right')}</div>
+            </div>
+          `).join('');
+      this.refreshIcons();
+
+    } catch (e) {
+      console.error(e);
+      container.innerHTML = `
+        <div class="error-state" style="text-align: center; padding: 3rem 1rem;">
+          <div style="font-size: 3rem; color: #ef4444; margin-bottom: 1rem;">${createIcon('alert-circle')}</div>
+          <h3 style="margin-bottom: 0.5rem;">No se pudo cargar el historial</h3>
+          <p style="opacity: 0.7; margin-bottom: 1.5rem;">Revise su conexión a internet y pruebe nuevamente.</p>
+          <button class="btn-primary" onclick="window.app.renderDevotionalHistory()">Reintentar</button>
+        </div>
+      `;
+      this.refreshIcons();
+    }
+  }
+
+  /* Método auxiliar para cargar un devocional específico del historial */
+  async loadDevotionalFromHistory(filename) {
+    this.showToast("Cargando devocional...");
+    try {
+      const response = await fetch(`https://dataconnect-kohl.vercel.app/${filename}`);
+      if (!response.ok) throw new Error("No encontrado");
+      const data = await response.json();
+      this.renderDevotionalView(data, true);
+    } catch (e) {
+      this.showToast("No se pudo abrir este devocional.");
+    }
+  }
+
+  // Refactor del renderizado para reutilizar en historial y último
+  renderDevotionalView(data, fromHistory = false) {
+    /* Si venimos del home (fromHistory=false), el currentView es devotional, updateamos UI */
+    /* Si venimos del historial, cambiamos la vista */
+    if (fromHistory) this.currentView = 'devotional-detail';
+
+    const html = `
+      <header>
+        <button class="btn-icon" onclick="${fromHistory ? 'window.app.renderDevotionalHistory()' : 'window.app.renderHome()'}\">${createIcon('arrow-left')}</button>
+        <h1>${fromHistory ? 'Devocional' : 'Devocional Semanal'}</h1>
+        ${!fromHistory ? `<button class="btn-icon" onclick="window.app.renderDevotionalHistory()">${createIcon('history')}</button>` : ''}
+      </header>
+      <div class="view-container animate-entrance" style="padding-bottom: 2rem;">
+        <div style="width: 100%; max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem;">
+            <div class="premium-card" style="padding: 0; overflow: hidden; border: none;">
+                <div style="background: var(--accent); padding: 1.5rem; color: white; text-align: center;">
+                    <span style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9;">${data.fecha_hora || 'Devocional'}</span>
+                    <h2 style="font-family: 'Playfair Display', serif; font-size: 1.8rem; margin: 0.5rem 0;">${data.titulo}</h2>
+                    <span style="font-size: 0.9rem; font-style: italic;">Por ${data.autor}</span>
+                </div>
+                <div style="padding: 2rem;">
+                    <div style="background: rgba(var(--accent-rgb), 0.1); border-left: 4px solid var(--accent); padding: 1rem; margin-bottom: 2rem; font-style: italic; color: var(--text-main);">
+                        "${data.versiculo}"
+                    </div>
+                    <div style="font-size: 1.1rem; line-height: 1.8; color: var(--text-main); margin-bottom: 2rem; white-space: pre-wrap;">${data.devocional}</div>
+                    <div style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 12px; border: 1px dashed var(--glass-border);">
+                        <h4 style="color: var(--accent); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">${createIcon('heart-handshake')} Oración</h4>
+                        <p style="font-style: italic; opacity: 0.9;">${data.oracion}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </div>
+    `;
+    this.render(html);
+  }
+
+  // --- Funcionalidad de Respaldo y Restauración ---
+
+  async exportUserData() {
+    this.showToast("Preparando exportación...");
+
+    try {
+      // 1. Crear JSON con datos del usuario
+      const backupData = this.db.exportUserData();
+      const jsonString = JSON.stringify(backupData, null, 2);
+
+      // 2. Definir nombre de archivo
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5).replace('T', '_');
+      const jsonFileName = `biblia_backup_${timestamp}.json`;
+
+      // 3. Guardar directamente en Documentos
+      await Filesystem.writeFile({
+        path: jsonFileName,
+        data: jsonString,
+        directory: Directory.Documents,
+        encoding: Encoding.UTF8
+      });
+
+      this.showToast(`Respaldo guardado en Documentos: ${jsonFileName}`);
+
+    } catch (error) {
+      console.error("Error exportando datos:", error);
+
+      let errorMessage = "Error al exportar datos";
+      if (error.message) {
+        if (error.message.includes("permission")) {
+          errorMessage = "Permisos insuficientes para guardar el archivo";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
+      this.showToast(errorMessage);
+    }
+  }
+
+
+  async importUserData() {
+    this.openConfirmModal(
+      "Importar Datos",
+      "Seleccione un archivo JSON de respaldo. Sus datos actuales (favoritos, notas, marcadores) serán reemplazados. ¿Desea continuar?",
+      () => {
+        this.selectBackupFile();
+      }
+    );
+  }
+
+  async selectBackupFile() {
+    try {
+      const result = await FilePicker.pickFiles({
+        types: ['application/json'],
+        readData: false
+      });
+
+      if (result.files.length > 0) {
+        const file = result.files[0];
+        // Verificar extensión
+        if (!file.name.toLowerCase().endsWith('.json')) {
+          this.showToast("Por favor seleccione un archivo .json");
+          return;
+        }
+
+        // En Android, file.path suele estar disponible o file.uri
+        const path = file.path || file.uri;
+        if (path) {
+          await this.performImport(path);
+        } else {
+          this.showToast("No se pudo acceder al archivo seleccionado");
+        }
+      }
+    } catch (error) {
+      if (error && error.message !== 'User cancelled') {
+        console.error("Error seleccionando archivo:", error);
+        this.showToast("Error al seleccionar archivo");
+      }
+    }
+  }
+
+  async performImport(filePath) {
+    this.showToast("Restaurando datos...");
+
+    try {
+      // 1. Leer el archivo directamente
+      // Nota: Filesystem.readFile puede leer desde rutas absolutas si se pasan correctamente
+      // En Capacitor, a veces es mejor usar la URI directamente si viene del FilePicker
+      const content = await Filesystem.readFile({
+        path: filePath,
+        encoding: Encoding.UTF8
+      });
+
+      if (!content || !content.data) {
+        throw new Error("El archivo está vacío o no se pudo leer");
+      }
+
+      const backupData = JSON.parse(content.data);
+
+      // 2. Importar a la base de datos
+      this.db.importUserData(backupData);
+
+      this.showToast("Restauración exitosa. Reiniciando aplicación...");
+
+      // 3. Reiniciar
+      setTimeout(() => window.location.reload(), 1500);
+
+    } catch (error) {
+      console.error("Error en importación:", error);
+      this.showToast("Error al importar: " + (error.message || error));
+    }
   }
 }
 window.app = new App();

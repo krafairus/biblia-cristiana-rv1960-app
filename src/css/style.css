@@ -31,15 +31,14 @@
   font-display: swap;
 }
 
+/* Default Theme (Internal fallback) */
 :root {
-  /* Default Theme (Classic/Old Bible) */
   --bg-color: #f4ece1;
   --bg-gradient: linear-gradient(135deg, #f4ece1 0%, #e8decb 100%);
   --card-bg: rgba(255, 255, 255, 0.7);
   --text-main: #3d2b1f;
   --text-muted: #6b5a4a;
   --accent: #c29958;
-  /* Antique Gold */
   --accent-soft: rgba(194, 153, 88, 0.1);
   --glass-border: rgba(61, 43, 31, 0.1);
   --shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
@@ -48,35 +47,37 @@
   --header-bg: rgba(244, 236, 225, 0.8);
 }
 
-[data-theme="dark"] {
-  --bg-color: #0f172a;
-  --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-  --card-bg: rgba(30, 41, 59, 0.7);
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --accent: #38bdf8;
-  --accent-soft: rgba(56, 189, 248, 0.1);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+/* --- ESTILO CLÁSICO --- */
+[data-style="classic"][data-mode="light"] {
+  --bg-color: #f4ece1;
+  --bg-gradient: linear-gradient(135deg, #f4ece1 0%, #e8decb 100%);
+  --card-bg: rgba(255, 255, 255, 0.7);
+  --text-main: #3d2b1f;
+  --text-muted: #6b5a4a;
+  --accent: #c29958;
+  --accent-soft: rgba(194, 153, 88, 0.1);
+  --glass-border: rgba(61, 43, 31, 0.1);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
+  --verse-hover: rgba(0, 0, 0, 0.03);
+  --header-bg: rgba(244, 236, 225, 0.8);
+}
+
+[data-style="classic"][data-mode="dark"] {
+  --bg-color: #1a140f;
+  --bg-gradient: linear-gradient(135deg, #1a140f 0%, #2d241c 100%);
+  --card-bg: rgba(70, 56, 44, 0.9);
+  --text-main: #e8decb;
+  --text-muted: #a39281;
+  --accent: #d4ae6d;
+  --accent-soft: rgba(212, 174, 109, 0.25);
+  --glass-border: rgba(232, 222, 203, 0.15);
+  --shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
   --verse-hover: rgba(255, 255, 255, 0.05);
-  --header-bg: rgba(15, 23, 42, 0.8);
+  --header-bg: rgba(26, 20, 15, 0.85);
 }
 
-[data-theme="light"] {
-  --bg-color: #ffffff;
-  --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  --card-bg: rgba(255, 255, 255, 0.8);
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --accent: #2563eb;
-  --accent-soft: rgba(37, 99, 235, 0.05);
-  --glass-border: rgba(15, 23, 42, 0.08);
-  --shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-  --verse-hover: rgba(0, 0, 0, 0.02);
-  --header-bg: rgba(255, 255, 255, 0.8);
-}
-
-[data-theme="floral"] {
+/* --- ESTILO FLORAL --- */
+[data-style="floral"][data-mode="light"] {
   --bg-color: #fff5f7;
   --bg-gradient: linear-gradient(135deg, #fff5f7 0%, #ffe4e9 100%);
   --card-bg: rgba(255, 255, 255, 0.85);
@@ -90,7 +91,22 @@
   --header-bg: rgba(255, 245, 247, 0.85);
 }
 
-[data-theme="pastel-blue"] {
+[data-style="floral"][data-mode="dark"] {
+  --bg-color: #240a12;
+  --bg-gradient: linear-gradient(135deg, #240a12 0%, #3d121f 100%);
+  --card-bg: rgba(85, 26, 44, 0.9);
+  --text-main: #ffe4e9;
+  --text-muted: #c48b95;
+  --accent: #ff69b4;
+  --accent-soft: rgba(255, 105, 180, 0.25);
+  --glass-border: rgba(255, 228, 233, 0.15);
+  --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  --verse-hover: rgba(255, 255, 255, 0.05);
+  --header-bg: rgba(36, 10, 18, 0.85);
+}
+
+/* --- ESTILO AZUL PASTEL --- */
+[data-style="pastel-blue"][data-mode="light"] {
   --bg-color: #ebf5ff;
   --bg-gradient: linear-gradient(135deg, #ebf5ff 0%, #d1e9ff 100%);
   --card-bg: rgba(255, 255, 255, 0.8);
@@ -104,25 +120,72 @@
   --header-bg: rgba(235, 245, 255, 0.85);
 }
 
-[data-theme="ink"] {
+[data-style="pastel-blue"][data-mode="dark"] {
+  --bg-color: #0d1b2a;
+  --bg-gradient: linear-gradient(135deg, #0d1b2a 0%, #1b263b 100%);
+  --card-bg: rgba(45, 60, 90, 0.9);
+  --text-main: #e0e1dd;
+  --text-muted: #a5a5a5;
+  --accent: #4cc9f0;
+  --accent-soft: rgba(76, 201, 240, 0.25);
+  --glass-border: rgba(224, 225, 221, 0.15);
+  --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  --verse-hover: rgba(255, 255, 255, 0.05);
+  --header-bg: rgba(13, 27, 42, 0.85);
+}
+
+/* --- ESTILO TINTA --- */
+[data-style="ink"][data-mode="light"] {
   --bg-color: #ffffff;
   --bg-gradient: none;
   --card-bg: #ffffff;
-  --text-main: #000000;
-  --text-muted: #444444;
-  --accent: #222222;
-  --accent-soft: #eeeeee;
-  --glass-border: #000000;
+  --text-main: #121212;
+  --text-muted: #555555;
+  --accent: #000000;
+  --accent-soft: rgba(0, 0, 0, 0.05);
+  --glass-border: rgba(0, 0, 0, 0.15);
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --verse-hover: rgba(0, 0, 0, 0.02);
+  --header-bg: rgba(255, 255, 255, 0.95);
+}
+
+[data-style="ink"][data-mode="dark"] {
+  --bg-color: #000000;
+  --bg-gradient: none;
+  --card-bg: #121212;
+  --text-main: #ffffff;
+  --text-muted: #aaaaaa;
+  --accent: #ffffff;
+  --accent-soft: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.3);
   --shadow: none;
-  --verse-hover: #f0f0f0;
-  --header-bg: #ffffff;
+  --verse-hover: rgba(255, 255, 255, 0.1);
+  --header-bg: rgba(0, 0, 0, 0.9);
+}
+
+/* Fallback para Tinta (por si acaso) */
+[data-style="ink"] {
+  --bg-color: #ffffff;
+  --bg-gradient: none;
+  --card-bg: #ffffff;
+  --text-main: #121212;
+  --text-muted: #555555;
+  --accent: #000000;
+  --accent-soft: rgba(0, 0, 0, 0.05);
+  --glass-border: rgba(0, 0, 0, 0.15);
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --verse-hover: rgba(0, 0, 0, 0.02);
+  --header-bg: rgba(255, 255, 255, 0.95);
 }
 
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 body {
@@ -288,6 +351,67 @@ header h1 {
   cursor: pointer;
   position: relative;
   overflow: hidden;
+  color: var(--text-main);
+}
+
+.home-vod-card {
+  width: 100%;
+  margin-bottom: 1.5rem;
+  padding: 2rem;
+  border-radius: 24px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 220px;
+  border: none;
+  background-color: #333;
+  color: white;
+  text-align: left;
+  overflow: hidden;
+}
+
+.home-vod-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.6));
+  z-index: 1;
+}
+
+.home-vod-card>* {
+  position: relative;
+  z-index: 2;
+}
+
+.home-vod-card .vod-thematic {
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 0.25rem;
+  opacity: 0.9;
+}
+
+.home-vod-card .vod-text {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.2rem;
+  font-style: italic;
+  line-height: 1.4;
+  margin-bottom: 0.75rem;
+}
+
+.home-vod-card .vod-ref {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .premium-card::after {
@@ -304,6 +428,10 @@ header h1 {
 
 .premium-card:active::after {
   opacity: 1;
+}
+
+[data-mode="dark"] .premium-card {
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .premium-card .icon-wrapper {
@@ -337,15 +465,10 @@ header h1 {
   padding: 1rem 1.25rem;
   margin-bottom: 0.5rem;
   border-radius: 12px;
-  transition: all 0.2s ease;
   cursor: pointer;
   display: flex;
   gap: 1rem;
   position: relative;
-}
-
-.verse-item:hover {
-  background: var(--verse-hover);
 }
 
 .verse-item.selected,
@@ -611,7 +734,18 @@ header h1 {
 .modal-subtitle {
   margin-bottom: 1.5rem;
   font-size: 0.9rem;
-  opacity: 0.6;
+  color: var(--text-main);
+  opacity: 0.7;
+}
+
+/* Fix para textos fijos en negro dentro de modales oscuros */
+.modal-box b,
+.modal-box strong {
+  color: var(--text-main);
+}
+
+.modal-box .premium-card b {
+  color: var(--text-main);
 }
 
 .modal-textarea {
@@ -814,4 +948,26 @@ input:checked+.slider:before {
 
 .slider.round:before {
   border-radius: 50%;
+}
+
+/* Favoritos - Mejor contraste y espaciado */
+.fav-card-item {
+  background: var(--card-bg) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+  margin-bottom: 1.25rem !important;
+}
+
+[data-theme="dark"] .fav-card-item {
+  background: rgba(30, 41, 59, 0.85) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="light"] .fav-card-item {
+  background: rgba(255, 255, 255, 0.95) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06) !important;
+}
+
+.fav-card-item.selected {
+  background: var(--accent-soft) !important;
+  border-left: 4px solid var(--accent) !important;
 }
