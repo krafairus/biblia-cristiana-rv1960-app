@@ -11,15 +11,31 @@
     <link rel="icon" type="image/png" href="/icon.png">
     <link rel="apple-touch-icon" href="/icon.png">
     <meta name="theme-color" content="#f4ece1">
+    <script>
+        (function () {
+            try {
+                const settings = JSON.parse(localStorage.getItem('bible_settings') || '{}');
+                const style = settings.theme_style || 'classic';
+                let mode = settings.theme_mode || 'light';
+
+                if (settings.system_theme) {
+                    mode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+
+                document.documentElement.setAttribute('data-style', style);
+                document.documentElement.setAttribute('data-mode', mode);
+            } catch (e) {
+                console.warn('Error loading theme:', e);
+            }
+        })();
+    </script>
 </head>
 
 <body>
     <div id="app">
-        <div id="splash"
-            style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f4ece1; color: #3d2b1f; font-family: sans-serif;">
-            <img src="/icon.png" alt="Logo"
-                style="width: 80px; height: 80px; margin-bottom: 20px; animation: pulse 2s infinite;">
-            <h2 style="margin-top: 20px; font-weight: 300;">Abriendo Biblia...</h2>
+        <div id="splash" class="splash-screen">
+            <img src="/icon.png" alt="Logo" class="splash-logo">
+            <h2 class="splash-text">Abriendo Biblia...</h2>
         </div>
     </div>
 
