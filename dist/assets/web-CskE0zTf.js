@@ -1,0 +1,1 @@
+import{W as p}from"./index-awdvDClv.js";class n extends p{async unzip(o){throw console.warn("Zip.unzip(): Web platform is not supported"),new Error("Zip.unzip(): Web platform is not supported")}async zip(o){throw console.warn("Zip.zip(): Web platform is not supported"),new Error("Zip.zip(): Web platform is not supported")}}export{n as ZipWeb};

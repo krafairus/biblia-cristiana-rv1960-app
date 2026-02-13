@@ -19,8 +19,11 @@ class App {
     this.currentVodBg = '/img/bg-verse-1.png';
     this.dictionary = [];
     this.isSpeaking = false;
+    this.isPaused = false;
+    this.currentVerseIndex = 0;
+    this.currentChapterVerses = [];
     this.aboutClickCount = 0;
-    this.appVersion = '1.1.9';
+    this.appVersion = '1.2.1';
     this.repo = 'krafairus/biblia-cristiana-rv1960-app';
     this.currentHighlightFilter = 'all';
     this.searchFilter = 'all';
@@ -165,8 +168,8 @@ class App {
       { text: "Antiguo T.", icon: "book", target: "old" },
       { text: "Nuevo T.", icon: "book-open", target: "new" },
       { text: "Buscar", icon: "search", target: "search" },
-      { text: "Última L.", icon: "history", target: "last" },
-      { text: "Vr. de hoy", icon: "sun", target: "vod" },
+      { text: "Última lectura", icon: "history", target: "last" },
+      { text: "Vr del dia", icon: "sun", target: "vod" },
       { text: "Devocional", icon: "coffee", target: "devotional" },
       { text: "Favoritos", icon: "heart", target: "favorites" },
       { text: "Notas", icon: "sticky-note", target: "notes" },
@@ -311,7 +314,12 @@ class App {
           <button class="btn-icon ${this.isSpeaking ? 'active' : ''}" id="tts-btn" 
                   style="${this.isSpeaking ? 'background: var(--accent); color: white;' : ''}"
                   onclick="window.app.toggleTTS('${book.replace(/'/g, "\\'")}', '${chapter}')" title="Leer capítulo">
-            ${createIcon(this.isSpeaking ? 'volume-x' : 'volume-2')}
+            ${createIcon(this.isSpeaking ? (this.isPaused ? 'play' : 'pause') : 'volume-2')}
+          </button>
+          <button class="btn-icon" id="tts-controls-btn" 
+                  style="display: ${this.isSpeaking ? 'flex' : 'none'}; background: var(--card-bg); border: 1px solid var(--glass-border); width: 40px; height: 40px; margin-left: -0.5rem;"
+                  onclick="window.app.openTTSDialog()" title="Controles de Audio">
+             ${createIcon('sliders-horizontal')}
           </button>
         </div>
         <div id="chapter-tabs" style="display: flex; overflow-x: auto; gap: 0.5rem; width: 100%; padding: 0.5rem 0 1rem 0; scrollbar-width: none;">
@@ -358,6 +366,27 @@ class App {
                 ${c === 'transparent' ? createIcon('ban') : ''}
             </div>
         `).join('')}
+      </div>
+
+      <!-- TTS Controls Dialog -->
+      <div id="tts-dialog" class="floating-toolbar animate-entrance" 
+           style="display: none; flex-direction: column; align-items: center; padding: 1rem; width: 85%; max-width: 350px; bottom: 100px; border-radius: 24px; gap: 1rem; background: var(--bg-color); border: 1px solid var(--glass-border);">
+          <div style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 700; font-size: 0.9rem; color: var(--accent);">Control de Lectura</span>
+            <button class="btn-icon" onclick="window.app.closeTTSDialog()" style="width: 30px; height: 30px; background: transparent; color: var(--text-main);">${createIcon('x')}</button>
+          </div>
+          
+          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 1rem; background: var(--card-bg); padding: 0.5rem; border-radius: 16px;">
+             <button class="btn-icon" onclick="window.app.prevVerseTTS()" style="width: 40px; height: 40px;">${createIcon('chevron-left')}</button>
+             <div style="text-align: center; flex: 1;">
+                <span id="tts-current-verse" style="font-weight: 700; font-size: 1.1rem; display: block;">Verso -</span>
+             </div>
+             <button class="btn-icon" onclick="window.app.nextVerseTTS()" style="width: 40px; height: 40px;">${createIcon('chevron-right')}</button>
+          </div>
+          
+          <button onclick="window.app.stopTTS()" style="width: 100%; padding: 0.8rem; border-radius: 12px; background: #ef4444; color: white; border: none; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+            ${createIcon('square')} Detener Reproducción
+          </button>
       </div>
     `;
     this.render(html);
@@ -582,8 +611,8 @@ class App {
             ${[
         { id: 'classic', name: 'Estilo Clásico', color: '#f4ece1' },
         { id: 'floral', name: 'Estilo Floral', color: '#fff5f7' },
-        { id: 'pastel-blue', name: 'Azul Pastel', color: '#ebf5ff' },
-        { id: 'ink', name: 'Modo Tinta', color: '#000000' }
+        { id: 'pastel-blue', name: 'Estilo Pastel', color: '#ebf5ff' },
+        { id: 'ink', name: 'Modo Tinta', color: '#ffffff' }
       ].map(t => `
               <div class="premium-card" onclick="window.app.applyTheme('${t.id}')" 
                    style="padding: 1rem; flex-direction: row; gap: 0.75rem; border: ${this.db.settings.theme_style === t.id ? '2px solid var(--accent)' : '1px solid var(--glass-border)'}">
@@ -1210,7 +1239,7 @@ class App {
     this.render(html);
   }
 
-  renderSearch() {
+  renderSearch(initialQuery = '') {
     this.currentView = 'search';
     const html = `
       <header>
@@ -1219,7 +1248,7 @@ class App {
       </header>
       <div class="view-container animate-entrance">
         <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;">
-          <input type="text" id="search-input" placeholder="¿Qué estás buscando?..." class="search-box" style="flex: 1; margin-bottom: 0;">
+          <input type="text" id="search-input" placeholder="¿Qué estás buscando?..." class="search-box" style="flex: 1; margin-bottom: 0;" value="${initialQuery}">
           <button class="btn-icon" onclick="window.app.openSearchBookModal()" 
                   style="background: var(--card-bg); border: 1px solid var(--glass-border); border-radius: 14px; width: 50px; height: 50px; flex-shrink: 0; position: relative; display: flex; align-items: center; justify-content: center; color: var(--text-main);">
             ${createIcon('filter')}
@@ -1269,17 +1298,23 @@ class App {
     input.addEventListener('input', (e) => {
       const query = e.target.value;
       if (query.length > 2) this.performSearch(query);
+      else if (query.length === 0) document.querySelector('#search-results').innerHTML = '';
     });
+    if (initialQuery) {
+      this.performSearch(initialQuery);
+      input.setSelectionRange(initialQuery.length, initialQuery.length);
+    }
     input.focus();
   }
 
   setSearchFilter(filter) {
+    const query = document.querySelector('#search-input')?.value || '';
     this.searchFilter = filter;
     if (filter === 'book') {
       this.openSearchBookModal();
     } else {
       this.searchBook = null;
-      this.renderSearch();
+      this.renderSearch(query);
     }
   }
 
@@ -1294,9 +1329,11 @@ class App {
   }
 
   selectSearchBook(book) {
+    const query = document.querySelector('#search-input')?.value || '';
     this.searchBook = book;
+    this.searchFilter = 'book';
     this.closeSearchBookModal();
-    this.renderSearch();
+    this.renderSearch(query);
   }
 
   performSearch(query) {
@@ -1455,7 +1492,7 @@ class App {
           </div>
         </div>
 
-        <p style="font-size: 0.8rem; opacity: 0.3; margin-top: 1rem;">VERSIÓN 1.2.0</p>
+        <p style="font-size: 0.8rem; opacity: 0.3; margin-top: 1rem;">VERSIÓN 1.2.1</p>
       </div>
     `;
     this.render(html);
@@ -1833,63 +1870,87 @@ class App {
   }
   async toggleTTS(book, chapter) {
     if (this.isSpeaking) {
-      this.stopTTS();
+      if (this.isPaused) {
+        this.resumeTTS();
+      } else {
+        this.pauseTTS();
+      }
       return;
     }
+
+    this.stopTTS();
 
     const verses = this.db.getVerses(book, chapter);
     if (!verses || verses.length === 0) return;
 
-    // Construir texto detallado: Título, Perícopes y Versículos
-    let parts = [`${book}, capítulo ${chapter}. `];
+    this.currentChapterVerses = [];
 
-    verses.forEach(([vNum, text]) => {
-      // Intentar obtener perícopa para este versículo
-      const pericope = this.db.getPericope(book, chapter, vNum);
-      if (pericope) {
-        parts.push(`${pericope}. `); // Lectura directa del título con pausa
-      }
+    // Structure: { text: string, vNum: string|null, type: 'title'|'pericope'|'verse' }
 
-      // Respetar ajuste de omitir números de verso
-      if (this.db.settings.skip_verse_numbers) {
-        parts.push(`${text} `);
-      } else {
-        parts.push(`Verso ${vNum}. ${text} `);
-      }
+    this.currentChapterVerses.push({
+      text: `${book}, capítulo ${chapter}.`,
+      vNum: null,
+      type: 'title'
     });
 
-    const fullText = parts.join('');
+    verses.forEach(([vNum, text]) => {
+      const pericope = this.db.getPericope(book, chapter, vNum);
+      if (pericope) {
+        this.currentChapterVerses.push({
+          text: pericope + ".",
+          vNum: null,
+          type: 'pericope'
+        });
+      }
+
+      let verseText = text;
+      if (!this.db.settings.skip_verse_numbers) {
+        verseText = `Verso ${vNum}. ${text}`;
+      }
+
+      this.currentChapterVerses.push({
+        text: verseText,
+        vNum: vNum,
+        type: 'verse'
+      });
+    });
+
+    this.currentVerseIndex = 0;
+    this.isSpeaking = true;
+    this.isPaused = false;
+    this.updateTTSButton();
+    this.playNextChunk();
+  }
+
+  async playNextChunk() {
+    if (!this.isSpeaking || this.isPaused) return;
+
+    if (this.currentVerseIndex >= this.currentChapterVerses.length) {
+      this.stopTTS();
+      return;
+    }
+
+    const chunk = this.currentChapterVerses[this.currentVerseIndex];
+    this.updateTTSDialogUI();
+
+    // Highlight logic
+    if (chunk.type === 'verse' && chunk.vNum) {
+      this.highlightReadingVerse(chunk.vNum);
+    } else {
+      // If title or pericope, maybe clear highlight or keep previous?
+      // Better to clear or subtle highlight. Let's clear for now.
+      this.clearReadingHighlight();
+    }
 
     const Capacitor = window.Capacitor;
+
     if (Capacitor && Capacitor.Plugins && Capacitor.Plugins.TextToSpeech) {
       try {
-        this.isSpeaking = true;
-        this.updateTTSButton(true);
-
-        // Intentar obtener el idioma de la voz seleccionada o forzar es-ES
         let speakLang = 'es-ES';
         let voiceIndex = this.db.settings.tts_voice;
 
-        try {
-          const result = await Capacitor.Plugins.TextToSpeech.getSupportedVoices();
-          const allVoices = result.voices;
-
-          // Lógica de autodetect para español si estamos en "Predeterminada" o voz no válida
-          if ((voiceIndex === 0 && !this.db.settings.tts_voice_name) || !allVoices[voiceIndex]) {
-            const firstEsp = allVoices.findIndex(v => v.lang.toLowerCase().startsWith('es'));
-            if (firstEsp !== -1) {
-              voiceIndex = firstEsp;
-              speakLang = allVoices[voiceIndex].lang;
-            }
-          } else {
-            speakLang = allVoices[voiceIndex].lang;
-          }
-        } catch (e) {
-          console.warn("Could not detect specific voice lang, using default es-ES");
-        }
-
         await Capacitor.Plugins.TextToSpeech.speak({
-          text: fullText,
+          text: chunk.text,
           lang: speakLang,
           rate: 1.0,
           pitch: 1.0,
@@ -1898,69 +1959,165 @@ class App {
           category: 'playback'
         });
 
-        // Cuando termina de hablar naturalmente
-        this.isSpeaking = false;
-        this.updateTTSButton(false);
+        this.currentVerseIndex++;
+        this.playNextChunk();
+
       } catch (e) {
-        console.error("TTS Error, attempting fallback:", e);
-        await this.handleTTSFallback(fullText);
+        console.error("TTS Error in chunk:", e);
+        this.stopTTS();
+        this.showToast("Error al reproducir audio");
       }
     } else {
-      this.showToast("TTS no disponible en este dispositivo");
-    }
-  }
-
-  async handleTTSFallback(text) {
-    const Capacitor = window.Capacitor;
-    if (!Capacitor || !Capacitor.Plugins.TextToSpeech) return;
-
-    try {
-      this.showToast("Cambiando a voz de respaldo...");
-      const result = await Capacitor.Plugins.TextToSpeech.getSupportedVoices();
-      const spanishVoiceIndex = result.voices.findIndex(v => v.lang.toLowerCase().startsWith('es'));
-
-      if (spanishVoiceIndex !== -1) {
-        await Capacitor.Plugins.TextToSpeech.speak({
-          text: text,
-          lang: result.voices[spanishVoiceIndex].lang,
-          rate: 1.0,
-          pitch: 1.0,
-          volume: 1.0,
-          voice: spanishVoiceIndex,
-          category: 'playback'
-        });
-      }
-    } catch (fallbackError) {
-      console.error("Critical TTS Failure:", fallbackError);
+      console.warn("TTS Plugin not available");
       this.stopTTS();
-      this.showToast("No se pudo iniciar el audio");
-    } finally {
-      this.isSpeaking = false;
-      this.updateTTSButton(false);
     }
   }
 
-  async stopTTS() {
+  highlightReadingVerse(vNum) {
+    this.clearReadingHighlight();
+    const el = document.getElementById(`v-${vNum}`);
+    if (el) {
+      el.classList.add('reading-active');
+      // Optional: Auto-scroll to active verse?
+      // el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  clearReadingHighlight() {
+    const active = document.querySelector('.verse-item.reading-active');
+    if (active) active.classList.remove('reading-active');
+  }
+
+  async nextVerseTTS() {
+    if (this.currentVerseIndex + 1 < this.currentChapterVerses.length) {
+      await this.stopTTSUtils();
+      this.currentVerseIndex++;
+      // Adjust index to point to next 'verse' type if currently on pericope? 
+      // For simplicity, just next chunk.
+      this.isPaused = false;
+      this.updateTTSButton();
+      this.playNextChunk();
+    } else {
+      this.showToast("Último versículo");
+    }
+  }
+
+  async prevVerseTTS() {
+    if (this.currentVerseIndex > 0) {
+      await this.stopTTSUtils();
+      this.currentVerseIndex--;
+      // Simple prev chunk logic.
+      if (this.currentVerseIndex < 0) this.currentVerseIndex = 0;
+
+      this.isPaused = false;
+      this.updateTTSButton();
+      this.playNextChunk();
+    } else {
+      this.showToast("Inicio del capítulo");
+    }
+  }
+
+  async stopTTSUtils() {
     const Capacitor = window.Capacitor;
     if (Capacitor && Capacitor.Plugins && Capacitor.Plugins.TextToSpeech) {
       await Capacitor.Plugins.TextToSpeech.stop();
     }
-    this.isSpeaking = false;
-    this.updateTTSButton(false);
   }
 
-  updateTTSButton(isSpeaking) {
+  openTTSDialog() {
+    const dialog = document.getElementById('tts-dialog');
+    if (dialog) dialog.style.display = 'flex';
+    this.updateTTSDialogUI();
+  }
+
+  closeTTSDialog() {
+    const dialog = document.getElementById('tts-dialog');
+    if (dialog) dialog.style.display = 'none';
+  }
+
+  updateTTSDialogUI() {
+    const el = document.getElementById('tts-current-verse');
+    if (!el) return;
+
+    const chunk = this.currentChapterVerses[this.currentVerseIndex];
+    if (!chunk) return;
+
+    if (chunk.type === 'title') {
+      el.innerText = "Título";
+    } else if (chunk.type === 'pericope') {
+      el.innerText = "Lectura";
+    } else if (chunk.type === 'verse') {
+      el.innerText = `Verso ${chunk.vNum}`;
+    } else {
+      el.innerText = "Lectura";
+    }
+  }
+
+  async pauseTTS() {
+    this.isPaused = true;
+    const Capacitor = window.Capacitor;
+    if (Capacitor && Capacitor.Plugins && Capacitor.Plugins.TextToSpeech) {
+      await Capacitor.Plugins.TextToSpeech.stop();
+    }
+    this.updateTTSButton();
+  }
+
+  async resumeTTS() {
+    this.isPaused = false;
+    this.updateTTSButton();
+    this.playNextChunk();
+  }
+
+  async stopTTS() {
+    this.isSpeaking = false;
+    this.isPaused = false;
+    this.currentVerseIndex = 0;
+    this.currentChapterVerses = [];
+    this.clearReadingHighlight();
+
+    const Capacitor = window.Capacitor;
+    if (Capacitor && Capacitor.Plugins && Capacitor.Plugins.TextToSpeech) {
+      await Capacitor.Plugins.TextToSpeech.stop();
+    }
+    this.updateTTSButton();
+    this.closeTTSDialog();
+  }
+
+  updateTTSButton() {
     const btn = document.getElementById('tts-btn');
+    const controlsBtn = document.getElementById('tts-controls-btn');
+
     if (btn) {
-      btn.innerHTML = createIcon(isSpeaking ? 'volume-x' : 'volume-2');
-      if (isSpeaking) {
+      let iconName = 'volume-2';
+      if (this.isSpeaking) {
+        if (this.isPaused) {
+          iconName = 'play';
+        } else {
+          iconName = 'pause';
+        }
+      }
+
+      btn.innerHTML = createIcon(iconName);
+
+      if (this.isSpeaking) {
         btn.classList.add('active');
         btn.style.background = 'var(--accent)';
         btn.style.color = 'white';
+        if (this.isPaused) {
+          btn.style.opacity = '0.7';
+        } else {
+          btn.style.opacity = '1';
+        }
+
+        if (controlsBtn) controlsBtn.style.display = 'flex';
+
       } else {
         btn.classList.remove('active');
         btn.style.background = '';
         btn.style.color = '';
+        btn.style.opacity = '1';
+
+        if (controlsBtn) controlsBtn.style.display = 'none';
       }
       this.refreshIcons();
     }

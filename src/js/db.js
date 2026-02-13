@@ -318,7 +318,7 @@ export class BibleDB {
     return {
       version: "1.0",
       export_date: new Date().toISOString(),
-      app_version: "1.2.0",
+      app_version: "1.2.1",
       data: {
         favorites: this.favorites,
         notes: this.notes,
