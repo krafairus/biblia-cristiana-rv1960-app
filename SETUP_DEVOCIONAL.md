@@ -46,11 +46,11 @@ Para que el panel pueda subir archivos a tu repositorio, necesita un permiso esp
 
 ## 3. Primer Uso del Panel Admin
 
-1. Sube la carpeta `web-externa` a tu hosting (Vercel, Firebase Hosting, etc.). El usuario indicó: `https://dataconnect-kohl.vercel.app/biblia-cristiana-rv1960-app/admin.html`.
+1. Sube la carpeta `web-externa` a tu hosting (Vercel, Firebase Hosting, etc.). El usuario indicó: `https://example-test.vercel.app/biblia-cristiana-rv1960-app/admin.html`.
 2. Abre la URL del admin (`admin.html`).
 3. Inicia sesión con Google.
 4. Aparecerá un cuadro de **"Configuración Inicial"**.
-5. Pega tu **GitHub Token** y el nombre de tu repositorio (`krafairus/dataconnect`).
+5. Pega tu **GitHub Token** y el nombre de tu repositorio (`username/example-test`).
 6. Dale a guardar. ¡Listo!
 
 Ahora puedes redactar y publicar devocionales desde la interfaz.
