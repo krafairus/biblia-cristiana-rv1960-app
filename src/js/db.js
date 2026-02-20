@@ -11,6 +11,35 @@ export class BibleDB {
     const defaults = { last_book: "Génesis", last_chapter: "1", theme: "classic", tts_voice: 0, tts_voice_name: "", skip_verse_numbers: false };
     const stored = JSON.parse(localStorage.getItem('bible_settings') || '{}');
     this.settings = { ...defaults, ...stored };
+
+    // Migración de datos: añadir título, pinned y fechas duales
+    let dataChanged = false;
+
+    // Migrar Notas
+    this.notes.forEach(n => {
+      if (n.title === undefined) { n.title = "Nota sin nombre"; dataChanged = true; }
+      if (n.pinned === undefined) { n.pinned = false; dataChanged = true; }
+      if (!n.dateCreated) { n.dateCreated = n.date || new Date().toISOString(); dataChanged = true; }
+      if (!n.dateUpdated) { n.dateUpdated = n.dateCreated; dataChanged = true; }
+    });
+
+    // Migrar Favoritos
+    this.favorites.forEach(f => {
+      if (!f.dateCreated) { f.dateCreated = f.date || new Date().toISOString(); dataChanged = true; }
+      if (!f.dateUpdated) { f.dateUpdated = f.dateCreated; dataChanged = true; }
+    });
+
+    // Migrar Marcadores
+    this.highlights.forEach(h => {
+      if (!h.dateCreated) { h.dateCreated = h.date || new Date().toISOString(); dataChanged = true; }
+      if (!h.dateUpdated) { h.dateUpdated = h.dateCreated; dataChanged = true; }
+    });
+
+    if (dataChanged) {
+      localStorage.setItem('bible_notes', JSON.stringify(this.notes));
+      localStorage.setItem('bible_favorites', JSON.stringify(this.favorites));
+      localStorage.setItem('bible_highlights', JSON.stringify(this.highlights));
+    }
   }
 
   async init() {
@@ -128,7 +157,8 @@ export class BibleDB {
     if (index > -1) {
       this.favorites.splice(index, 1);
     } else {
-      this.favorites.push({ id, book, chapter, verse, text, date: new Date().toISOString() });
+      const now = new Date().toISOString();
+      this.favorites.push({ id, book, chapter, verse, text, dateCreated: now, dateUpdated: now });
     }
     localStorage.setItem('bible_favorites', JSON.stringify(this.favorites));
     return index === -1; // returns true if added
@@ -139,8 +169,16 @@ export class BibleDB {
     localStorage.setItem('bible_favorites', JSON.stringify(this.favorites));
   }
 
-  addNote(book, chapter, verse, text, noteContent) {
-    this.notes.push({ book, chapter, verse, text, note: noteContent, date: new Date().toISOString() });
+  addNote(book, chapter, verse, text, noteContent, title) {
+    const now = new Date().toISOString();
+    this.notes.push({
+      book, chapter, verse, text,
+      note: noteContent,
+      title: title || "Nota sin nombre",
+      dateCreated: now,
+      dateUpdated: now,
+      pinned: false
+    });
     localStorage.setItem('bible_notes', JSON.stringify(this.notes));
   }
 
@@ -149,12 +187,22 @@ export class BibleDB {
     localStorage.setItem('bible_notes', JSON.stringify(this.notes));
   }
 
-  updateNote(index, noteContent) {
+  updateNote(index, noteContent, title) {
     if (this.notes[index]) {
       this.notes[index].note = noteContent;
-      this.notes[index].date = new Date().toISOString();
+      if (title !== undefined) this.notes[index].title = title;
+      this.notes[index].dateUpdated = new Date().toISOString();
       localStorage.setItem('bible_notes', JSON.stringify(this.notes));
     }
+  }
+
+  togglePinNote(index) {
+    if (this.notes[index]) {
+      this.notes[index].pinned = !this.notes[index].pinned;
+      localStorage.setItem('bible_notes', JSON.stringify(this.notes));
+      return this.notes[index].pinned;
+    }
+    return false;
   }
 
   isHighlighted(book, chapter, verse) {
@@ -165,10 +213,15 @@ export class BibleDB {
   addHighlight(book, chapter, verse, text, color) {
     const id = `${book} ${chapter}:${verse}`;
     // Remove if exists to update color
+    let hDateCreated = null;
     const existingIdx = this.highlights.findIndex(h => h.id === id);
-    if (existingIdx > -1) this.highlights.splice(existingIdx, 1);
+    if (existingIdx > -1) {
+      hDateCreated = this.highlights[existingIdx].dateCreated;
+      this.highlights.splice(existingIdx, 1);
+    }
 
-    this.highlights.push({ id, book, chapter, verse, text, color, date: new Date().toISOString() });
+    const now = new Date().toISOString();
+    this.highlights.push({ id, book, chapter, verse, text, color, dateCreated: hDateCreated || now, dateUpdated: now });
     localStorage.setItem('bible_highlights', JSON.stringify(this.highlights));
   }
 
@@ -318,7 +371,7 @@ export class BibleDB {
     return {
       version: "1.0",
       export_date: new Date().toISOString(),
-      app_version: "1.2.1",
+      app_version: "1.2.3",
       data: {
         favorites: this.favorites,
         notes: this.notes,

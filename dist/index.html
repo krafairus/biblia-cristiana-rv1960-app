@@ -29,8 +29,8 @@
             }
         })();
     </script>
-  <script type="module" crossorigin src="./assets/index-awdvDClv.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-CQNR2BJ5.css">
+  <script type="module" crossorigin src="./assets/index-Cg8XcBJh.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-BtoZUrIZ.css">
 </head>
 
 <body>
@@ -41,19 +41,7 @@
         </div>
     </div>
 
-    <!-- Modal para Notas -->
-    <div id="note-modal" class="modal-overlay">
-        <div class="modal-box">
-            <h2 class="modal-title">Escribir Nota</h2>
-            <p id="note-verse-ref" class="modal-subtitle"></p>
-            <textarea id="note-text" class="modal-textarea"
-                placeholder="¿Qué te dice Dios en este versículo?..."></textarea>
-            <div class="modal-actions">
-                <button class="modal-btn secondary" onclick="window.app.closeNoteModal()">Cancelar</button>
-                <button class="modal-btn primary" onclick="window.app.saveNoteFromModal()">Guardar Nota</button>
-            </div>
-        </div>
-    </div>
+    <!-- El modal de notas ha sido reemplazado por una vista a pantalla completa gestionada dinámicamente -->
 
     <!-- Modal para Compartir -->
     <div id="share-modal" class="modal-overlay">
@@ -127,24 +115,14 @@
         </button>
     </div>
 
-    <div id="note-selection-bar" class="floating-toolbar animate-entrance" style="display: none;">
-        <button class="tool-btn" onclick="window.app.handleEditNoteFromBar()" title="Editar Nota">
-            <i data-lucide="edit-3"></i>
-        </button>
-        <button class="tool-btn" onclick="window.app.confirmDeleteNoteFromBar()" title="Eliminar Nota"
-            style="color: #ef4444;">
-            <i data-lucide="trash-2"></i>
-        </button>
-        <button class="tool-btn" onclick="window.app.clearNoteSelection()" title="Cerrar">
-            <i data-lucide="x"></i>
-        </button>
-    </div>
-
     <!-- Modal de Confirmación -->
     <div id="confirm-modal" class="modal-overlay">
         <div class="modal-box" style="text-align: center;">
             <h2 class="modal-title" id="confirm-title">¿Confirmar?</h2>
-            <p id="confirm-msg" class="modal-subtitle" style="margin-bottom: 2rem;"></p>
+            <p id="confirm-msg" class="modal-subtitle" style="margin-bottom: 1.25rem;"></p>
+            <div id="confirm-extra"
+                style="display:none; margin-bottom: 1.5rem; text-align: left; max-height: 200px; overflow-y: auto; padding: 1rem; background: var(--card-bg); border-radius: 12px; font-size: 0.9rem; line-height: 1.5; border: 1px solid var(--glass-border);">
+            </div>
             <div class="modal-actions" style="justify-content: center; gap: 1rem;">
                 <button class="modal-btn secondary" onclick="window.app.closeConfirmModal()"
                     style="flex: 1;">Cancelar</button>
@@ -153,6 +131,9 @@
             </div>
         </div>
     </div>
+
+
+
 
     <style>
         @keyframes spin {

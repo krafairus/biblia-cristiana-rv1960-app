@@ -149,6 +149,63 @@
   --header-bg: rgba(255, 255, 255, 0.95);
 }
 
+/* --- ESTILO BOSQUE --- */
+[data-style="forest"][data-mode="light"] {
+  --bg-color: #f1f8e9;
+  --bg-gradient: linear-gradient(135deg, #f1f8e9 0%, #dcedc8 100%);
+  --card-bg: rgba(255, 255, 255, 0.75);
+  --text-main: #1b5e20;
+  --text-muted: #4e7d4e;
+  --accent: #388e3c;
+  --accent-soft: rgba(56, 142, 60, 0.1);
+  --glass-border: rgba(27, 94, 32, 0.1);
+  --shadow: 0 8px 30px rgba(27, 94, 32, 0.08);
+  --verse-hover: rgba(56, 142, 60, 0.03);
+  --header-bg: rgba(241, 248, 233, 0.85);
+}
+
+[data-style="forest"][data-mode="dark"] {
+  --bg-color: #0d1a0d;
+  --bg-gradient: linear-gradient(135deg, #0d1a0d 0%, #1a2e1a 100%);
+  --card-bg: rgba(30, 45, 30, 0.9);
+  --text-main: #e8f5e9;
+  --text-muted: #a5d6a7;
+  --accent: #81c784;
+  --accent-soft: rgba(129, 199, 132, 0.25);
+  --glass-border: rgba(232, 245, 233, 0.15);
+  --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  --verse-hover: rgba(255, 255, 255, 0.05);
+  --header-bg: rgba(13, 26, 13, 0.85);
+}
+
+/* --- ESTILO ORO --- */
+[data-style="gold"][data-mode="light"] {
+  --bg-color: #fffdfa;
+  --bg-gradient: linear-gradient(135deg, #fffdfa 0%, #f7f3ec 100%);
+  --card-bg: rgba(255, 255, 255, 0.85);
+  --text-main: #3e2723;
+  --text-muted: #6d4c41;
+  --accent: #b8860b;
+  --accent-soft: rgba(184, 134, 11, 0.1);
+  --glass-border: rgba(62, 39, 35, 0.1);
+  --shadow: 0 8px 30px rgba(184, 134, 11, 0.08);
+  --verse-hover: rgba(184, 134, 11, 0.03);
+  --header-bg: rgba(255, 253, 250, 0.85);
+}
+
+[data-style="gold"][data-mode="dark"] {
+  --bg-color: #0c0c0c;
+  --bg-gradient: linear-gradient(135deg, #0c0c0c 0%, #1a1a1a 100%);
+  --card-bg: rgba(28, 28, 28, 0.9);
+  --text-main: #f5f5f5;
+  --text-muted: #b0b0b0;
+  --accent: #d4af37;
+  --accent-soft: rgba(212, 175, 55, 0.25);
+  --glass-border: rgba(245, 245, 245, 0.15);
+  --shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+  --verse-hover: rgba(255, 255, 255, 0.05);
+  --header-bg: rgba(12, 12, 12, 0.85);
+}
 
 * {
   margin: 0;
@@ -773,25 +830,8 @@ header h1 {
   color: var(--text-main);
 }
 
-.modal-textarea {
-  width: 100%;
-  min-height: 150px;
-  background: var(--card-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  padding: 1rem;
-  color: var(--text-main);
-  font-family: inherit;
-  font-size: 1rem;
-  resize: none;
-  margin-bottom: 1.5rem;
-  outline: none;
-  transition: border-color 0.2s;
-}
+/* .modal-textarea removido para evitar conflictos con el editor enriquecido */
 
-.modal-textarea:focus {
-  border-color: var(--accent);
-}
 
 .modal-actions {
   display: flex;
@@ -876,7 +916,7 @@ header h1 {
   bottom: 100px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 9999;
+  z-index: 300000;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -983,12 +1023,12 @@ input:checked+.slider:before {
 }
 
 [data-mode="dark"] .fav-card-item {
-  background: rgba(30, 41, 59, 0.85) !important;
+  background: var(--card-bg) !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
 }
 
 [data-mode="light"] .fav-card-item {
-  background: rgba(255, 255, 255, 0.95) !important;
+  background: var(--card-bg) !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06) !important;
 }
 
@@ -1025,4 +1065,214 @@ input:checked+.slider:before {
   to {
     transform: scaleX(1);
   }
+}
+
+/* Editor Enriquecido */
+.rich-editor-container {
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--card-bg);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  margin-top: 0.5rem;
+}
+
+.rich-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  background: var(--glass-bg);
+  border-bottom: 1px solid var(--glass-border);
+  backdrop-filter: blur(10px);
+}
+
+.rich-toolbar button {
+  background: none;
+  border: none;
+  color: var(--text-main);
+  padding: 0.4rem;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  width: 34px;
+  height: 34px;
+}
+
+.rich-toolbar button:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.rich-toolbar button svg,
+.rich-toolbar button i {
+  width: 16px;
+  height: 16px;
+}
+
+.rich-toolbar .separator {
+  width: 1px;
+  height: 16px;
+  background: var(--glass-border);
+  margin: 0 0.15rem;
+  align-self: center;
+}
+
+.rich-editor {
+  min-height: 200px;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 1.25rem;
+  text-align: left;
+  outline: none;
+  border: none !important;
+  background: transparent !important;
+  line-height: 1.7;
+  font-size: 1.05rem;
+  color: var(--text-main);
+}
+
+.rich-editor ul,
+.rich-editor ol {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+  list-style-position: outside;
+}
+
+.rich-editor li {
+  margin-bottom: 0.25rem;
+}
+
+.rich-editor-container:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.rich-editor[placeholder]:empty:before {
+  content: attr(placeholder);
+  color: var(--text-muted);
+  opacity: 0.5;
+  font-style: italic;
+}
+
+/* Gesto de Swipe en Notas */
+.note-swipe-wrapper {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--accent-soft);
+  /* Color de fondo cuando se desliza */
+  touch-action: pan-y;
+  /* Solo permitir scroll vertical en el contenedor para no interferir con el swipe horizontal */
+}
+
+.note-swipe-action-bg {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  padding-right: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: white;
+  font-weight: 700;
+  font-size: 0.85rem;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.2s;
+  background: var(--accent-soft);
+}
+
+/* Variante: fondo del botón de borrar (izquierda → derecha) */
+.note-swipe-delete-bg {
+  background: #ef4444;
+  padding-right: 0;
+  padding-left: 1.2rem;
+  justify-content: flex-start;
+  right: auto;
+  left: 0;
+}
+
+.note-swipe-action-bg svg {
+  width: 24px;
+  height: 24px;
+  transform: scale(0.5);
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.note-swipe-action-bg.active {
+  opacity: 1;
+}
+
+.note-swipe-action-bg.active svg {
+  transform: scale(1.2);
+}
+
+.note-card {
+  z-index: 2;
+  position: relative;
+  transition: transform 0.1s ease-out;
+  cursor: grab;
+  user-select: none;
+}
+
+.note-card:active {
+  cursor: grabbing;
+}
+
+.note-card.swiping {
+  transition: none;
+}
+
+.note-card.snap-back {
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transform: translateX(0) !important;
+}
+
+/* Resultados de búsqueda de notas */
+.search-results-list {
+  padding: 0.5rem;
+}
+
+.search-result-item {
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: transform 0.2s, background 0.2s;
+  text-align: left;
+}
+
+.search-result-item:active {
+  transform: scale(0.98);
+  background: var(--accent-soft);
+}
+
+.search-result-item b {
+  color: var(--accent);
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.95rem;
+}
+
+.search-result-item p {
+  font-size: 0.9rem;
+  opacity: 0.8;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 0.25rem;
+}
+
+.note-card.selected {
+  border: 2px solid var(--accent) !important;
+  background: var(--accent-soft) !important;
 }
