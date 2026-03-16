@@ -8,7 +8,8 @@ export class BibleDB {
     this.favorites = JSON.parse(localStorage.getItem('bible_favorites') || '[]');
     this.notes = JSON.parse(localStorage.getItem('bible_notes') || '[]');
     this.highlights = JSON.parse(localStorage.getItem('bible_highlights') || '[]');
-    const defaults = { last_book: "Génesis", last_chapter: "1", theme: "classic", tts_voice: 0, tts_voice_name: "", skip_verse_numbers: false };
+    this.devotionalFavorites = JSON.parse(localStorage.getItem('bible_devotional_favorites') || '[]');
+    const defaults = { last_book: "Génesis", last_chapter: "1", theme: "classic", tts_voice: 0, tts_voice_name: "", skip_verse_numbers: false, editor_mode_enabled: false, editor_warning_shown: false };
     const stored = JSON.parse(localStorage.getItem('bible_settings') || '{}');
     this.settings = { ...defaults, ...stored };
 
@@ -30,15 +31,32 @@ export class BibleDB {
     });
 
     // Migrar Marcadores
+    const colorMap = {
+      // De respaldo/viejos a nuevos
+      '#fee2e2': '#fecaca', // Rojo
+      '#ffedd5': '#fed7aa', // Naranja
+      '#f3f4f6': '#f9fafb', // Gris/Blanco viejo
+      // De vibrantes (sesión anterior) a nuevos
+      '#fde68a': '#fef3c7', // Amarillo
+      '#86efac': '#dcfce7', // Verde
+      '#93c5fd': '#dbeafe', // Azul
+      '#d8b4fe': '#fae8ff', // Púrpura
+      '#fca5a5': '#fecaca', // Rojo/Rosa
+      '#fdba74': '#fed7aa', // Naranja
+      '#9ca3af': '#f9fafb'  // Gris
+    };
+
     this.highlights.forEach(h => {
       if (!h.dateCreated) { h.dateCreated = h.date || new Date().toISOString(); dataChanged = true; }
       if (!h.dateUpdated) { h.dateUpdated = h.dateCreated; dataChanged = true; }
+      if (colorMap[h.color]) { h.color = colorMap[h.color]; dataChanged = true; }
     });
 
     if (dataChanged) {
       localStorage.setItem('bible_notes', JSON.stringify(this.notes));
       localStorage.setItem('bible_favorites', JSON.stringify(this.favorites));
       localStorage.setItem('bible_highlights', JSON.stringify(this.highlights));
+      localStorage.setItem('bible_devotional_favorites', JSON.stringify(this.devotionalFavorites));
     }
   }
 
@@ -158,10 +176,20 @@ export class BibleDB {
       this.favorites.splice(index, 1);
     } else {
       const now = new Date().toISOString();
-      this.favorites.push({ id, book, chapter, verse, text, dateCreated: now, dateUpdated: now });
+      this.favorites.push({ id, book, chapter, verse, text, dateCreated: now, dateUpdated: now, pinned: false });
     }
     localStorage.setItem('bible_favorites', JSON.stringify(this.favorites));
     return index === -1; // returns true if added
+  }
+
+  togglePinFavorite(index) {
+    if (this.favorites[index]) {
+      this.favorites[index].pinned = !this.favorites[index].pinned;
+      this.favorites[index].dateUpdated = new Date().toISOString();
+      localStorage.setItem('bible_favorites', JSON.stringify(this.favorites));
+      return this.favorites[index].pinned;
+    }
+    return false;
   }
 
   deleteFavorite(index) {
@@ -239,6 +267,27 @@ export class BibleDB {
     localStorage.setItem('bible_highlights', JSON.stringify(this.highlights));
   }
 
+  isDevotionalFavorite(titulo) {
+    return this.devotionalFavorites.some(f => f.titulo === titulo);
+  }
+
+  toggleDevotionalFavorite(data) {
+    const index = this.devotionalFavorites.findIndex(f => f.titulo === data.titulo);
+    if (index > -1) {
+      this.devotionalFavorites.splice(index, 1);
+    } else {
+      const now = new Date().toISOString();
+      this.devotionalFavorites.push({ ...data, dateFavorited: now });
+    }
+    localStorage.setItem('bible_devotional_favorites', JSON.stringify(this.devotionalFavorites));
+    return index === -1; // returns true if added
+  }
+
+  deleteDevotionalFavorite(index) {
+    this.devotionalFavorites.splice(index, 1);
+    localStorage.setItem('bible_devotional_favorites', JSON.stringify(this.devotionalFavorites));
+  }
+
   setLastRead(book, chapter) {
     this.settings.last_book = book;
     this.settings.last_chapter = chapter;
@@ -281,6 +330,8 @@ export class BibleDB {
       .replace(/\.([^\s])/g, '. $1')
       .replace(/;([^\s])/g, '; $1')
       .replace(/:([^\s])/g, ': $1')
+      .replace(/\?([^\s])/g, '? $1')
+      .replace(/!([^\s])/g, '! $1')
       .replace(/\s+/g, ' ')
       .trim();
   }
@@ -293,13 +344,14 @@ export class BibleDB {
 
     const now = new Date();
     const day = now.getDate(); // 1-31
+    const month = now.getMonth() + 1; // 1-12
     const year = now.getFullYear();
     const data = dailyVerses[day];
 
     if (!data) return this.getRandomVerse();
 
-    // Seleccionar una de las 5 opciones basada en el año
-    const optionIndex = year % 5;
+    // Selecionar una de las 10 opciones basada en año, mes y día para máxima rotación
+    const optionIndex = (year + month + day) % 10;
     const ref = data.options[optionIndex];
 
     // Parsear la referencia (ej: "Salmos 23:1", "1 Juan 4:19", "Judas 1:1")
@@ -376,6 +428,7 @@ export class BibleDB {
         favorites: this.favorites,
         notes: this.notes,
         highlights: this.highlights,
+        devotional_favorites: this.devotionalFavorites,
         settings: this.settings
       }
     };
@@ -390,12 +443,14 @@ export class BibleDB {
     this.favorites = backupData.data.favorites || [];
     this.notes = backupData.data.notes || [];
     this.highlights = backupData.data.highlights || [];
+    this.devotionalFavorites = backupData.data.devotional_favorites || [];
     this.settings = { ...this.settings, ...backupData.data.settings };
 
     // Guardar en localStorage
     localStorage.setItem('bible_favorites', JSON.stringify(this.favorites));
     localStorage.setItem('bible_notes', JSON.stringify(this.notes));
     localStorage.setItem('bible_highlights', JSON.stringify(this.highlights));
+    localStorage.setItem('bible_devotional_favorites', JSON.stringify(this.devotionalFavorites));
     localStorage.setItem('bible_settings', JSON.stringify(this.settings));
   }
 }
