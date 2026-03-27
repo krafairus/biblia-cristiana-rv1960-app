@@ -1,0 +1,5 @@
+package com.krafairus.bibliacristiana;
+
+import androidx.core.content.FileProvider;
+
+public class GenericFileProvider extends FileProvider {}

@@ -14,3 +14,7 @@ android/app/src/main/assets/capacitor.config.json
 .idea/
 *.swp
 *.log
+
+# Firebase / Data Connect
+dataconnect/
+android/build/

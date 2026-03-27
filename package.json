@@ -1,7 +1,7 @@
 {
-  "name": "biblie-app-lx",
-  "version": "1.2.6",
-  "description": "",
+  "name": "biblia-cristiana-rv1960",
+  "version": "1.3.1",
+  "description": "Aplicación de Biblia offline con diseño premium",
   "main": "index.js",
   "scripts": {
     "dev": "vite",
@@ -19,12 +19,14 @@
   "dependencies": {
     "@capacitor-community/text-to-speech": "^8.0.0",
     "@capacitor/android": "^8.0.2",
+    "@capacitor/app": "^8.1.0",
     "@capacitor/cli": "^8.0.2",
     "@capacitor/core": "^8.0.2",
     "@capacitor/filesystem": "^8.1.0",
     "@capacitor/share": "^8.0.0",
     "@capawesome/capacitor-file-picker": "^8.0.1",
-    "capa-zip": "^8.0.1",
+    "@capgo/capacitor-pdf-generator": "^8.0.18",
+    "appwrite": "^24.0.0",
     "cordova-plugin-apkupdater": "^5.0.1",
     "firebase": "^12.9.0",
     "firebase-admin": "^13.6.1",

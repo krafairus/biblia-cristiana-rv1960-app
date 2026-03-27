@@ -8,38 +8,101 @@ export class BibleDB {
     this.favorites = JSON.parse(localStorage.getItem('bible_favorites') || '[]');
     this.notes = JSON.parse(localStorage.getItem('bible_notes') || '[]');
     this.highlights = JSON.parse(localStorage.getItem('bible_highlights') || '[]');
-    const defaults = { last_book: "Génesis", last_chapter: "1", theme: "classic", tts_voice: 0, tts_voice_name: "", skip_verse_numbers: false };
+    this.devotionalFavorites = JSON.parse(localStorage.getItem('bible_devotional_favorites') || '[]');
+    
+    this.syncMetadata = JSON.parse(localStorage.getItem('bible_sync_metadata') || '{"last_sync": 0}');
+
+    const defaults = {
+      last_book: "Génesis",
+      last_chapter: "1",
+      theme_style: "classic",
+      theme_mode: "light",
+      tts_voice: 0,
+      tts_voice_name: "",
+      system_theme: false,
+      skip_verse_numbers: false
+    };
     const stored = JSON.parse(localStorage.getItem('bible_settings') || '{}');
+
+    // Compatibilidad: migrar 'theme' a 'theme_style' si existe
+    if (stored.theme && !stored.theme_style) {
+      stored.theme_style = stored.theme;
+      delete stored.theme;
+    }
+
     this.settings = { ...defaults, ...stored };
 
-    // Migración de datos: añadir título, pinned y fechas duales
-    let dataChanged = false;
+    this.runMigrations();
+  }
 
-    // Migrar Notas
+  runMigrations() {
+    let changed = false;
+
+    // Migración general: asegurar fechas y campo pinned
+    const migrateItem = (item) => {
+      let itemChanged = false;
+      if (!item.syncId) {
+        item.syncId = crypto.randomUUID();
+        itemChanged = true;
+      }
+      if (item.isDirty === undefined) {
+        item.isDirty = true; // Por defecto marcar como sucio si no tiene ID de sync
+        itemChanged = true;
+      }
+      if (item.isDeleted === undefined) {
+        item.isDeleted = false;
+        itemChanged = true;
+      }
+      if (!item.dateCreated) {
+        item.dateCreated = item.date || new Date().toISOString();
+        itemChanged = true;
+      }
+      if (!item.dateUpdated) {
+        item.dateUpdated = item.date || new Date().toISOString();
+        itemChanged = true;
+      }
+      if (item.pinned === undefined) {
+        item.pinned = false;
+        itemChanged = true;
+      }
+      return itemChanged;
+    };
+
+    this.favorites.forEach(f => { if (migrateItem(f)) changed = true; });
+    this.highlights.forEach(h => { if (migrateItem(h)) changed = true; });
     this.notes.forEach(n => {
-      if (n.title === undefined) { n.title = "Nota sin nombre"; dataChanged = true; }
-      if (n.pinned === undefined) { n.pinned = false; dataChanged = true; }
-      if (!n.dateCreated) { n.dateCreated = n.date || new Date().toISOString(); dataChanged = true; }
-      if (!n.dateUpdated) { n.dateUpdated = n.dateCreated; dataChanged = true; }
+      if (migrateItem(n)) changed = true;
+      if (n.title === undefined) {
+        n.title = "Nota sin nombre";
+        changed = true;
+      }
+      if (n.note !== undefined) {
+        n.notes = n.note;
+        delete n.note;
+        changed = true;
+      }
     });
+    this.devotionalFavorites.forEach(d => { if (migrateItem(d)) changed = true; });
 
-    // Migrar Favoritos
-    this.favorites.forEach(f => {
-      if (!f.dateCreated) { f.dateCreated = f.date || new Date().toISOString(); dataChanged = true; }
-      if (!f.dateUpdated) { f.dateUpdated = f.dateCreated; dataChanged = true; }
-    });
-
-    // Migrar Marcadores
-    this.highlights.forEach(h => {
-      if (!h.dateCreated) { h.dateCreated = h.date || new Date().toISOString(); dataChanged = true; }
-      if (!h.dateUpdated) { h.dateUpdated = h.dateCreated; dataChanged = true; }
-    });
-
-    if (dataChanged) {
-      localStorage.setItem('bible_notes', JSON.stringify(this.notes));
-      localStorage.setItem('bible_favorites', JSON.stringify(this.favorites));
-      localStorage.setItem('bible_highlights', JSON.stringify(this.highlights));
+    if (changed) {
+      this.saveAll();
     }
+  }
+
+  getActiveHighlights() {
+    return this.highlights.filter(h => !h.isDeleted);
+  }
+
+  getActiveDevotionalFavorites() {
+    return this.devotionalFavorites.filter(d => !d.isDeleted);
+  }
+
+  saveAll() {
+    localStorage.setItem('bible_favorites', JSON.stringify(this.favorites));
+    localStorage.setItem('bible_notes', JSON.stringify(this.notes));
+    localStorage.setItem('bible_highlights', JSON.stringify(this.highlights));
+    localStorage.setItem('bible_devotional_favorites', JSON.stringify(this.devotionalFavorites));
+    localStorage.setItem('bible_sync_metadata', JSON.stringify(this.syncMetadata));
   }
 
   async init() {
@@ -130,11 +193,14 @@ export class BibleDB {
     return null;
   }
 
-  search(query) {
+  search(query, bookFilter = '') {
     if (!this.bibleData) return [];
     const q = query.toLowerCase();
     const results = [];
-    for (const [book, chapters] of Object.entries(this.bibleData)) {
+    const booksToSearch = bookFilter ? { [bookFilter]: this.bibleData[bookFilter] } : this.bibleData;
+
+    for (const [book, chapters] of Object.entries(booksToSearch)) {
+      if (!chapters) continue;
       for (const [chapter, verses] of Object.entries(chapters)) {
         for (const [vNum, text] of Object.entries(verses)) {
           if (text.toLowerCase().includes(q)) {
@@ -154,45 +220,91 @@ export class BibleDB {
   toggleFavorite(book, chapter, verse, text) {
     const id = `${book} ${chapter}:${verse}`;
     const index = this.favorites.findIndex(f => f.id === id);
+    const now = new Date().toISOString();
+    
     if (index > -1) {
-      this.favorites.splice(index, 1);
+      if (this.favorites[index].isDeleted) {
+          // Si estaba borrado suavemente, lo reactivamos
+          this.favorites[index].isDeleted = false;
+          this.favorites[index].isDirty = true;
+          this.favorites[index].dateUpdated = now;
+      } else {
+          // Borrado suave
+          this.favorites[index].isDeleted = true;
+          this.favorites[index].isDirty = true;
+          this.favorites[index].dateUpdated = now;
+      }
     } else {
-      const now = new Date().toISOString();
-      this.favorites.push({ id, book, chapter, verse, text, dateCreated: now, dateUpdated: now });
+      this.favorites.push({ 
+          id, book, chapter, verse, text, 
+          syncId: crypto.randomUUID(),
+          dateCreated: now, dateUpdated: now, 
+          pinned: false, isDirty: true, isDeleted: false 
+      });
     }
-    localStorage.setItem('bible_favorites', JSON.stringify(this.favorites));
-    return index === -1; // returns true if added
+    this.saveAll();
+    return index === -1 || (index > -1 && !this.favorites[index].isDeleted);
+  }
+
+  getActiveFavorites() {
+    return this.favorites.filter(f => !f.isDeleted);
+  }
+
+  togglePinFavorite(index) {
+    if (this.favorites[index]) {
+      this.favorites[index].pinned = !this.favorites[index].pinned;
+      this.favorites[index].dateUpdated = new Date().toISOString();
+      localStorage.setItem('bible_favorites', JSON.stringify(this.favorites));
+      return this.favorites[index].pinned;
+    }
+    return false;
   }
 
   deleteFavorite(index) {
-    this.favorites.splice(index, 1);
-    localStorage.setItem('bible_favorites', JSON.stringify(this.favorites));
+    if (this.favorites[index]) {
+        this.favorites[index].isDeleted = true;
+        this.favorites[index].isDirty = true;
+        this.favorites[index].dateUpdated = new Date().toISOString();
+        this.saveAll();
+    }
   }
 
   addNote(book, chapter, verse, text, noteContent, title) {
     const now = new Date().toISOString();
     this.notes.push({
+      syncId: crypto.randomUUID(),
       book, chapter, verse, text,
-      note: noteContent,
+      notes: noteContent,
       title: title || "Nota sin nombre",
       dateCreated: now,
       dateUpdated: now,
-      pinned: false
+      pinned: false,
+      isDirty: true,
+      isDeleted: false
     });
-    localStorage.setItem('bible_notes', JSON.stringify(this.notes));
+    this.saveAll();
+  }
+
+  getActiveNotes() {
+    return this.notes.filter(n => !n.isDeleted);
   }
 
   deleteNote(index) {
-    this.notes.splice(index, 1);
-    localStorage.setItem('bible_notes', JSON.stringify(this.notes));
+    if (this.notes[index]) {
+        this.notes[index].isDeleted = true;
+        this.notes[index].isDirty = true;
+        this.notes[index].dateUpdated = new Date().toISOString();
+        this.saveAll();
+    }
   }
 
   updateNote(index, noteContent, title) {
     if (this.notes[index]) {
-      this.notes[index].note = noteContent;
+      this.notes[index].notes = noteContent;
       if (title !== undefined) this.notes[index].title = title;
       this.notes[index].dateUpdated = new Date().toISOString();
-      localStorage.setItem('bible_notes', JSON.stringify(this.notes));
+      this.notes[index].isDirty = true;
+      this.saveAll();
     }
   }
 
@@ -212,31 +324,85 @@ export class BibleDB {
 
   addHighlight(book, chapter, verse, text, color) {
     const id = `${book} ${chapter}:${verse}`;
-    // Remove if exists to update color
-    let hDateCreated = null;
+    const now = new Date().toISOString();
+    let syncId = crypto.randomUUID();
+    let hDateCreated = now;
+
     const existingIdx = this.highlights.findIndex(h => h.id === id);
     if (existingIdx > -1) {
-      hDateCreated = this.highlights[existingIdx].dateCreated;
+      syncId = this.highlights[existingIdx].syncId || syncId;
+      hDateCreated = this.highlights[existingIdx].dateCreated || now;
       this.highlights.splice(existingIdx, 1);
     }
 
-    const now = new Date().toISOString();
-    this.highlights.push({ id, book, chapter, verse, text, color, dateCreated: hDateCreated || now, dateUpdated: now });
-    localStorage.setItem('bible_highlights', JSON.stringify(this.highlights));
+    this.highlights.push({ 
+        id, book, chapter, verse, text, color, 
+        syncId, dateCreated: hDateCreated, dateUpdated: now,
+        isDirty: true, isDeleted: false 
+    });
+    this.saveAll();
   }
 
   removeHighlight(book, chapter, verse) {
     const id = `${book} ${chapter}:${verse}`;
     const index = this.highlights.findIndex(h => h.id === id);
     if (index > -1) {
-      this.highlights.splice(index, 1);
-      localStorage.setItem('bible_highlights', JSON.stringify(this.highlights));
+      this.highlights[index].isDeleted = true;
+      this.highlights[index].isDirty = true;
+      this.highlights[index].dateUpdated = new Date().toISOString();
+      this.saveAll();
     }
   }
 
   deleteHighlight(index) {
-    this.highlights.splice(index, 1);
-    localStorage.setItem('bible_highlights', JSON.stringify(this.highlights));
+    if (this.highlights[index]) {
+        this.highlights[index].isDeleted = true;
+        this.highlights[index].isDirty = true;
+        this.highlights[index].dateUpdated = new Date().toISOString();
+        this.saveAll();
+    }
+  }
+
+  isDevotionalFavorite(titulo) {
+    return this.devotionalFavorites.some(f => f.titulo === titulo);
+  }
+
+  toggleDevotionalFavorite(data) {
+    const index = this.devotionalFavorites.findIndex(f => f.titulo === data.titulo);
+    const now = new Date().toISOString();
+
+    if (index > -1) {
+      if (this.devotionalFavorites[index].isDeleted) {
+          this.devotionalFavorites[index].isDeleted = false;
+          this.devotionalFavorites[index].isDirty = true;
+          this.devotionalFavorites[index].dateUpdated = now;
+      } else {
+          this.devotionalFavorites[index].isDeleted = true;
+          this.devotionalFavorites[index].isDirty = true;
+          this.devotionalFavorites[index].dateUpdated = now;
+      }
+    } else {
+      this.devotionalFavorites.push({ 
+          ...data, 
+          syncId: crypto.randomUUID(),
+          dateFavorited: now, 
+          dateCreated: now,
+          dateUpdated: now,
+          isDirty: true,
+          isDeleted: false
+      });
+    }
+    this.saveAll();
+    return index === -1 || (index > -1 && !this.devotionalFavorites[index].isDeleted);
+  }
+
+  deleteDevotionalFavorite(index) {
+    if (this.devotionalFavorites[index]) {
+        this.devotionalFavorites[index].isDeleted = true;
+        this.devotionalFavorites[index].isDirty = true;
+        this.devotionalFavorites[index].dateUpdated = new Date().toISOString();
+        this.saveAll();
+    }
   }
 
   setLastRead(book, chapter) {
@@ -281,6 +447,8 @@ export class BibleDB {
       .replace(/\.([^\s])/g, '. $1')
       .replace(/;([^\s])/g, '; $1')
       .replace(/:([^\s])/g, ': $1')
+      .replace(/\?([^\s])/g, '? $1')
+      .replace(/!([^\s])/g, '! $1')
       .replace(/\s+/g, ' ')
       .trim();
   }
@@ -293,13 +461,14 @@ export class BibleDB {
 
     const now = new Date();
     const day = now.getDate(); // 1-31
+    const month = now.getMonth() + 1; // 1-12
     const year = now.getFullYear();
     const data = dailyVerses[day];
 
     if (!data) return this.getRandomVerse();
 
-    // Seleccionar una de las 5 opciones basada en el año
-    const optionIndex = year % 5;
+    // Selecionar una de las 10 opciones basada en año, mes y día para máxima rotación
+    const optionIndex = (year + month + day) % 10;
     const ref = data.options[optionIndex];
 
     // Parsear la referencia (ej: "Salmos 23:1", "1 Juan 4:19", "Judas 1:1")
@@ -318,8 +487,6 @@ export class BibleDB {
     const [chapter, verse] = chapterVerse.split(':');
 
     // Normalizar nombre de libro para coincidir con la DB si es necesario
-    // La lista del usuario usa "Is." (Isaías), "Sant." (Santiago), etc.
-    // Vamos a intentar buscar el libro que más se parezca o usar una tabla de mapeo básica.
     const normalizedBook = this.normalizeBookName(bookName);
 
     if (this.bibleData[normalizedBook] && this.bibleData[normalizedBook][chapter]) {
@@ -371,31 +538,47 @@ export class BibleDB {
     return {
       version: "1.0",
       export_date: new Date().toISOString(),
-      app_version: "1.2.3",
+      app_version: "1.3.1",
       data: {
         favorites: this.favorites,
         notes: this.notes,
         highlights: this.highlights,
+        devotionalFavorites: this.devotionalFavorites,
         settings: this.settings
       }
     };
   }
 
-  // Importar datos del usuario
   importUserData(backupData) {
-    if (!backupData.version || !backupData.data) {
+    // Soporte para formato nuevo y antiguo (Android WebApp)
+    let dataToImport = backupData;
+    if (backupData && backupData.data) {
+      dataToImport = backupData.data;
+    }
+
+    if (typeof dataToImport !== 'object' || dataToImport === null) {
       throw new Error("Formato de backup inválido");
     }
 
-    this.favorites = backupData.data.favorites || [];
-    this.notes = backupData.data.notes || [];
-    this.highlights = backupData.data.highlights || [];
-    this.settings = { ...this.settings, ...backupData.data.settings };
+    this.favorites = dataToImport.favorites || dataToImport.bible_favorites || [];
+    this.notes = dataToImport.notes || dataToImport.bible_notes || [];
+    this.highlights = dataToImport.highlights || dataToImport.bible_highlights || [];
+    this.devotionalFavorites = dataToImport.devotionalFavorites || dataToImport.devotional_favorites || [];
 
-    // Guardar en localStorage
-    localStorage.setItem('bible_favorites', JSON.stringify(this.favorites));
-    localStorage.setItem('bible_notes', JSON.stringify(this.notes));
-    localStorage.setItem('bible_highlights', JSON.stringify(this.highlights));
+    const importedSettings = dataToImport.settings || dataToImport.bible_settings || {};
+    if (importedSettings.theme && !importedSettings.theme_style) {
+      importedSettings.theme_style = importedSettings.theme;
+      delete importedSettings.theme;
+    }
+
+    this.settings = { ...this.settings, ...importedSettings };
+
+    // Correr migraciones por si los datos antiguos vienen sin fechas, title o pinned
+    this.runMigrations();
+
+    this.saveAll();
     localStorage.setItem('bible_settings', JSON.stringify(this.settings));
+    return true;
   }
 }
+
