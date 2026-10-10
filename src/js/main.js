@@ -17,7 +17,9 @@ class App {
     this.selectedNoteIndex = null;
     this.editingNoteIndex = undefined;
     this.currentVod = null;
-    this.currentVodBg = '/img/bg-verse-1.png';
+    const seed = new Date().getFullYear() * 10000 + (new Date().getMonth() + 1) * 100 + new Date().getDate();
+    const defaultBgNum = (seed % 11) + 1;
+    this.currentVodBg = `/img/bg-verse-${defaultBgNum}.png`;
     this.currentVodDesign = 1;
     this.dictionary = [];
     this.isSpeaking = false;
@@ -25,7 +27,7 @@ class App {
     this.currentVerseIndex = 0;
     this.currentChapterVerses = [];
     this.aboutClickCount = 0;
-    this.appVersion = '1.3.1';
+    this.appVersion = '1.3.4';
     this.repo = 'krafairus/biblia-cristiana-rv1960-app';
     this.currentHighlightFilter = 'all';
     this.searchFilter = 'all';
@@ -44,6 +46,8 @@ class App {
 
     this.isElectron = !!window.electronAPI;
     this.capacitorApp = CapacitorApp;
+
+    this.currentUser = null;
 
     if (this.isElectron) {
       document.body.classList.add('electron');
@@ -207,6 +211,11 @@ class App {
       }
     });
 
+    // Escuchar actualización remota del texto bíblico (fire-and-forget en db.js)
+    window.addEventListener('bible-data-updated', () => {
+      this.showToast('📖 Textos bíblicos actualizados');
+    }, { once: true });
+
     const loaded = await this.db.init();
     if (loaded) {
       this.migrateThemes();
@@ -216,6 +225,9 @@ class App {
       this.renderFloatingNav();
       this.updateFloatingNavState();
       this.checkForUpdates(true);
+
+
+
 
 
     } else {
@@ -345,13 +357,30 @@ class App {
     const seed = new Date().getFullYear() * 10000 + (new Date().getMonth() + 1) * 100 + new Date().getDate();
     const bgNum = (seed % 11) + 1;
 
+    const hour = new Date().getHours();
+    let greeting, greetingIcon;
+    if (hour >= 5 && hour < 12) {
+      greeting = 'Buenos días';
+      greetingIcon = 'sunrise';
+    } else if (hour >= 12 && hour < 19) {
+      greeting = 'Buenas tardes';
+      greetingIcon = 'sun';
+    } else {
+      greeting = 'Buenas noches';
+      greetingIcon = 'moon';
+    }
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+    const dateFormatted = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+
     const html = `
       <header>
         <div style="display:flex; flex-direction:column;">
-          <h1 style="font-family: 'Playfair Display', serif; font-size: 1.5rem; line-height:1.1;">BIBLIA CRISTIANA</h1>
-          <div style="font-size: 0.7rem; opacity: 0.6; color: var(--accent); font-weight: 800; letter-spacing: 2px; margin-top:2px;">REINA VALERA 1960</div>
+          <h1 style="font-family: 'Playfair Display', serif; font-size: 1.25rem; line-height:1.1;">BIBLIA CRISTIANA</h1>
+          <div style="font-size: 0.7rem; opacity: 0.6; color: var(--accent); font-weight: 800; letter-spacing: 2px; margin-top:2px;">RV 1960</div>
         </div>
-        <div style="margin-left:auto; display:flex; gap:0.5rem;">
+        <div style="margin-left:auto; display:flex; gap:0.5rem; align-items:center;">
           ${this.db.settings.theme_style !== 'ink' ? `
           <button class="btn-icon" onclick="window.app.toggleMode()" id="theme-toggle-btn">
             ${createIcon(this.db.settings.theme_mode === 'dark' ? 'sun' : 'moon')}
@@ -362,16 +391,42 @@ class App {
       </header>
 
       <div class="view-container with-main-nav animate-entrance">
-        ${vod ? `
-          <div class="home-vod-card" onclick="window.pendingVerseScroll = '${vod.verse}'; window.app.renderReader('${vod.book}', '${vod.chapter}')"
-               style="background-image: url('/img/bg-verse-${bgNum}.png'); border-radius: 28px; box-shadow: 0 12px 30px rgba(0,0,0,0.25);">
-            <div class="vod-thematic" style="background:none; border:none; padding:0; font-size:0.75rem; color:white; opacity:0.85; font-weight:800; letter-spacing:2px; margin-bottom:0.25rem; text-transform:uppercase;">${vod.thematic}</div>
-            <div class="vod-text">"${vod.text}"</div>
-            <div class="vod-ref">${vod.book} ${vod.chapter}:${vod.verse}</div>
-          </div>
-        ` : ''}
 
-        <h2 class="home-section-title">${createIcon('book')} Testamentos</h2>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
+          <div style="display:flex; align-items:center; gap:0.5rem; color:var(--accent);">
+            ${createIcon(greetingIcon)}
+            <span style="font-size:0.95rem; font-weight:800;">${greeting}</span>
+          </div>
+          <span style="font-size:0.75rem; opacity:0.55; font-weight:600; color:var(--text-main);">${dateFormatted}</span>
+        </div>
+
+        ${vod ? `
+          <div class="home-vod-card" onclick="window.app.navigate('vod')"
+               style="background-image: url('${this.currentVodBg}'); border-radius: 26px; box-shadow: 0 12px 30px rgba(0,0,0,0.22); min-height: 190px; position: relative; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; background-size: cover; background-position: center; cursor: pointer; padding: 1.25rem 1.4rem;">
+            <div style="position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.82) 100%); z-index: 1;"></div>
+            <div style="position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+              <div class="vod-thematic" style="font-size: 0.75rem; color: rgba(255,255,255,0.9); font-weight: 800; letter-spacing: 2px; text-transform: uppercase; display: flex; align-items: center; gap: 0.35rem;">
+                ${createIcon('sparkles')} Versículo del Día
+              </div>
+              <span style="font-size: 0.7rem; font-weight: 700; color: #ffffff; background: rgba(255,255,255,0.2); backdrop-filter: blur(8px); padding: 0.2rem 0.6rem; border-radius: 20px; border: 1px solid rgba(255,255,255,0.25);">
+                ${vod.thematic || 'DE HOY'}
+              </span>
+            </div>
+            <div style="position: relative; z-index: 2; margin-top: auto;">
+              <div class="vod-text" style="font-size: 1.15rem; color: #ffffff; font-family: 'Playfair Display', serif; font-style: italic; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 0.6rem; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                "${vod.text}"
+              </div>
+              <div class="vod-ref" style="font-size: 0.95rem; color: var(--accent, #f4c462); font-weight: 800; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: space-between;">
+                <span>${vod.book} ${vod.chapter}:${vod.verse}</span>
+                <span style="font-size: 0.75rem; font-weight: 700; color: #ffffff; opacity: 0.9; display: flex; align-items: center; gap: 0.2rem;">
+                  Ver ${createIcon('chevron-right')}
+                </span>
+              </div>
+            </div>
+          </div>
+        ` : `<div style="height:190px; min-height:190px; border-radius:26px; background:var(--card-bg); border:1px solid var(--glass-border);"></div>`}
+
+        <h2 class="home-section-title">${createIcon('book')} Biblia</h2>
         <div class="home-grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
           <div class="premium-card" onclick="window.app.navigate('old')" style="flex-direction:column; justify-content:center; gap:0.75rem; padding: 1.5rem 1rem;">
             <div class="icon-wrapper" style="background:var(--accent-soft); color:var(--accent); width:42px; height:42px;">${createIcon('book')}</div>
@@ -430,8 +485,8 @@ class App {
     else if (target === 'highlights') this.renderHighlights();
     else if (target === 'search') this.renderSearch();
     else if (target === 'dict') this.renderDictionary();
-    else if (target === 'about') this.renderAbout();
     else if (target === 'settings') this.renderSettings();
+    else if (target === 'about') this.renderAbout();
     else if (target === 'vod') this.renderVerseOfDay();
     else if (target === 'crecimiento') this.renderCrecimiento();
     else if (target === 'devocional') this.renderDevotionalHistory();
@@ -456,7 +511,7 @@ class App {
     const hideViews = [
       'reader', 'note-editor',          // Lectura y edición
       'old', 'new', 'chapters', 'verses', // Selección de libro/capítulo/versículo
-      'settings', 'about',               // Configuración e información
+      'settings', 'about',    // Configuración e información
       'crecimiento', 'devocional', 'preguntas', 'devotional-favorites', 'devotional-history', 'devotional-detail',
       'vod', 'share-verse', 'dict', 'editor-admin'
     ];
@@ -509,6 +564,11 @@ class App {
       nav.innerHTML = navContent;
     }
     this.refreshIcons();
+
+    if (!this._navResizeListenerAdded) {
+      window.addEventListener('resize', () => this.updateFloatingNavState());
+      this._navResizeListenerAdded = true;
+    }
   }
 
   renderBookList(testament) {
@@ -1309,20 +1369,32 @@ class App {
     const currentContent = document.getElementById('editor-note-text').innerHTML;
     const savedNote = index !== null ? this.db.notes[index] : null;
 
-    // Si hay una nota guardada, preguntar qué versión exportar
+    // Obtener datos extras para el PDF (versículo asociado)
+    const refContainer = document.querySelector('#verse-card-editor .editor-verse-ref');
+    const textContainer = document.querySelector('#verse-card-editor .editor-verse-text');
+    const noteContext = {
+      reference: refContainer ? refContainer.innerText : (savedNote ? savedNote.reference || '' : ''),
+      verseText: textContainer ? textContainer.innerText.replace(/^"|"$/g, '') : (savedNote ? savedNote.verseText || '' : ''),
+      dateCreated: savedNote ? savedNote.dateCreated : new Date().toISOString(),
+      dateUpdated: savedNote ? savedNote.dateUpdated : new Date().toISOString()
+    };
+
     if (savedNote) {
       this._tempExportData = {
         title: title,
-        content: savedNote.note || '',
-        current: currentContent
+        content: savedNote.notes || savedNote.note || '',
+        current: currentContent,
+        context: noteContext
       };
 
       const choicesHtml = `
-        <div class="modal-choice-list">
-          <button class="modal-choice-btn primary" onclick="window.app.generatePDF(window.app._tempExportData.title, window.app._tempExportData.current); window.app.closeConfirmModal();">
+        <div class="modal-choice-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <button class="modal-choice-btn primary" onclick="window.app.generatePDF(window.app._tempExportData.title, window.app._tempExportData.current, window.app._tempExportData.context); window.app.closeConfirmModal();"
+                  style="width:100%; padding:0.8rem; border-radius:12px; border:none; background:var(--accent); color:white; font-weight:700; display:flex; align-items:center; justify-content:center; gap:0.5rem;">
             <i data-lucide="edit-3"></i> Cambios Actuales
           </button>
-          <button class="modal-choice-btn" onclick="window.app.generatePDF(window.app._tempExportData.title, window.app._tempExportData.content); window.app.closeConfirmModal();">
+          <button class="modal-choice-btn" onclick="window.app.generatePDF(window.app._tempExportData.title, window.app._tempExportData.content, window.app._tempExportData.context); window.app.closeConfirmModal();"
+                  style="width:100%; padding:0.8rem; border-radius:12px; border:1px solid var(--glass-border); background:var(--bg-secondary); color:var(--text-main); font-weight:600; display:flex; align-items:center; justify-content:center; gap:0.5rem;">
             <i data-lucide="save"></i> Versión Guardada
           </button>
         </div>
@@ -1330,147 +1402,186 @@ class App {
 
       this.openConfirmModal(
         "Exportar PDF",
-        "Selecciona qué versión deseas exportar:",
-        () => { }, // No se usa el botón OK por defecto
-        null, // Ocultar botón OK
+        "Selecciona qué versión deseas exportar con diseño premium:",
+        () => { },
+        null, 
         null,
         choicesHtml
       );
-      this.refreshIcons(); // Para los iconos de Lucide en el modal
+      this.refreshIcons();
     } else {
-      // Si es una nota nueva, exportar el contenido actual
-      this.generatePDF(title, currentContent);
+      this.generatePDF(title, currentContent, noteContext);
     }
   }
 
-  async generatePDF(title, contentHtml) {
+  async generatePDF(title, contentHtml, context = {}) {
     try {
-      this.showToast('Generando PDF...');
+      this.showToast('Generando PDF Premium...');
 
-      // Obtener referencia bibliográfica y texto usando los nuevos IDs
-      const refContainer = document.querySelector('#verse-card-editor div div div');
-      const textContainer = document.getElementById('verse-text-editor');
+      const reference = context.reference || '';
+      const verseText = context.verseText || '';
+      const dateCreated = context.dateCreated ? new Date(context.dateCreated) : new Date();
+      const dateUpdated = context.dateUpdated ? new Date(context.dateUpdated) : new Date();
 
-      const reference = refContainer ? refContainer.innerText : '';
-      const verseText = textContainer ? textContainer.innerText.replace(/^"|"$/g, '') : '';
-
-      // 1. Construir el HTML para el PDF con diseño Premium
       const pdfHtml = `
         <!DOCTYPE html>
-        <html>
+        <html lang="es">
         <head>
           <meta charset="UTF-8">
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap');
+            
+            * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
-              font-family: 'Inter', 'Helvetica', 'Arial', sans-serif; 
-              padding: 50px; 
-              color: #1f2937; 
-              line-height: 1.7;
+              font-family: 'Inter', sans-serif; 
+              padding: 60px 50px; 
+              color: #1e293b; 
+              line-height: 1.6;
               background: #ffffff;
+              font-size: 11pt;
             }
-            .header { 
-              margin-bottom: 40px; 
-              padding-bottom: 20px;
-              border-bottom: 1px solid #e5e7eb;
+            .brand-header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              margin-bottom: 40px;
+              border-bottom: 2px solid #f1f5f9;
+              padding-bottom: 15px;
             }
-            .title { 
-              font-size: 32px; 
-              font-weight: 700; 
-              margin-bottom: 8px; 
-              color: #111827;
-              line-height: 1.2;
+            .brand-name {
+              font-family: 'Playfair Display', serif;
+              font-size: 14pt;
+              color: #b91c1c;
+              font-weight: 800;
+              letter-spacing: -0.5px;
             }
-            .date { 
-              font-size: 14px; 
-              color: #6b7280; 
+            .doc-type {
+              font-size: 8pt;
+              text-transform: uppercase;
+              letter-spacing: 2px;
+              color: #94a3b8;
+              font-weight: 700;
+            }
+            .title-section {
+              margin-bottom: 30px;
+            }
+            .note-title { 
+              font-family: 'Playfair Display', serif;
+              font-size: 28pt; 
+              font-weight: 800; 
+              color: #0f172a;
+              line-height: 1.1;
+              margin-bottom: 10px;
+            }
+            .metadata {
+              display: flex;
+              gap: 20px;
+              font-size: 9pt;
+              color: #64748b;
               font-weight: 500;
             }
-            .verse-card { 
-              background: #f8fafc; 
-              border-left: 5px solid #6366f1; 
-              padding: 24px; 
-              margin-bottom: 40px; 
-              border-radius: 12px;
-              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            .metadata b { color: #475569; }
+
+            .verse-highlight { 
+              background: #fffbeb; 
+              border: 1px solid #fde68a;
+              padding: 25px; 
+              margin: 35px 0; 
+              border-radius: 16px;
+              position: relative;
             }
             .verse-ref { 
-              font-weight: 700; 
-              color: #6366f1; 
-              font-size: 14px; 
+              font-weight: 800; 
+              color: #b45309; 
+              font-size: 10pt; 
               text-transform: uppercase;
-              letter-spacing: 0.05em;
-              margin-bottom: 8px;
+              letter-spacing: 1px;
+              margin-bottom: 10px;
+              display: flex;
+              align-items: center;
+              gap: 5px;
             }
-            .verse-content { 
+            .verse-text { 
+              font-family: 'Playfair Display', serif;
               font-style: italic; 
-              color: #475569; 
-              font-size: 17px;
-              line-height: 1.6;
+              color: #78350f; 
+              font-size: 14pt;
+              line-height: 1.5;
             }
-            .content { 
-              font-size: 17px; 
-              word-wrap: break-word; 
+            .verse-quote-mark {
+              position: absolute;
+              top: -15px;
+              left: 20px;
+              font-size: 40pt;
+              color: #fde68a;
+              font-family: 'Playfair Display', serif;
+              line-height: 1;
+              opacity: 0.5;
+            }
+
+            .main-content { 
+              font-size: 12pt; 
               color: #334155;
+              text-align: justify;
             }
+            .main-content p { margin-bottom: 15px; }
+            
+            /* Estilos enriquecidos */
+            h1, h2, h3 { font-family: 'Playfair Display', serif; color: #0f172a; margin: 30px 0 15px 0; }
+            h1 { font-size: 20pt; border-left: 4px solid #b91c1c; padding-left: 15px; }
+            h2 { font-size: 17pt; }
+            
+            blockquote { 
+              border-left: 4px solid #e2e8f0; 
+              padding: 10px 20px; 
+              font-style: italic; 
+              margin: 20px 0;
+              color: #475569;
+              background: #f8fafc;
+            }
+            
             .footer { 
-              margin-top: 60px; 
-              font-size: 13px; 
+              position: fixed;
+              bottom: 40px;
+              left: 50px;
+              right: 50px;
+              font-size: 8pt; 
               color: #94a3b8; 
               text-align: center; 
               border-top: 1px solid #f1f5f9; 
-              padding-top: 25px;
-              font-weight: 500;
+              padding-top: 20px;
             }
-            /* Estilos para contenido enriquecido */
-            h1, h2, h3 { color: #1e1b4b; margin-top: 30px; margin-bottom: 15px; }
-            h1 { font-size: 26px; border-bottom: 1px solid #f1f5f9; padding-bottom: 5px; }
-            h2 { font-size: 22px; }
-            h3 { font-size: 20px; }
-            blockquote { 
-              border-left: 4px solid #6366f1; 
-              background: #f5f7ff; 
-              padding: 15px 25px; 
-              font-style: italic; 
-              margin: 25px 0;
-              border-radius: 0 12px 12px 0;
-              color: #4338ca;
-            }
-            pre { 
-              background: #0f172a; 
-              color: #f8fafc; 
-              padding: 20px; 
-              border-radius: 12px; 
-              font-family: 'Courier New', monospace; 
-              font-size: 15px;
-              overflow-x: auto; 
-              white-space: pre-wrap;
-              margin: 25px 0;
-            }
-            hr { border: none; border-top: 2px solid #f1f5f9; margin: 30px 0; }
-            a { color: #6366f1; text-decoration: none; font-weight: 600; }
-            ul, ol { padding-left: 25px; margin: 20px 0; }
-            li { margin-bottom: 8px; }
-            .editor-bottom-spacer { display: none; }
           </style>
         </head>
         <body>
-          <div class="header">
-            <div class="title">${title}</div>
-            <div class="date">${new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+          <div class="brand-header">
+            <div class="brand-name">Biblia Cristiana RV1960</div>
+            <div class="doc-type">Estudio Personal</div>
+          </div>
+
+          <div class="title-section">
+            <h1 class="note-title">${title}</h1>
+            <div class="metadata">
+              <span><b>Creado:</b> ${dateCreated.toLocaleDateString('es-ES')}</span>
+              <span><b>Actualizado:</b> ${dateUpdated.toLocaleDateString('es-ES')}</span>
+            </div>
           </div>
           
-          <div class="verse-card">
-            <div class="verse-ref">${reference}</div>
-            <div class="verse-content">"${verseText}"</div>
+          ${reference ? `
+          <div class="verse-highlight">
+            <div class="verse-quote-mark">“</div>
+            <div class="verse-ref">Evangelio • ${reference}</div>
+            <div class="verse-text">${verseText}</div>
           </div>
+          ` : ''}
           
-          <div class="content">
+          <div class="main-content">
             ${contentHtml}
           </div>
           
           <div class="footer">
-            Documento espiritual generado desde BIBLIA CRISTIANA RV1960
+            Este documento fue generado el ${new Date().toLocaleString('es-ES')} <br>
+            <b>Biblia Cristiana RV1960 para Android</b> • La Palabra en tus manos
           </div>
         </body>
         </html>
@@ -1670,8 +1781,21 @@ class App {
   }
 
   // Métodos de compatibilidad redirigidos al nuevo sistema
-  toggleEditorPanel(id) { this.toggleSubToolbar(id); }
-  closeEditorPanel(id) { this.toggleSubToolbar(null); }
+  toggleEditorPanel(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.classList.contains('active')) {
+      el.classList.remove('active');
+    } else {
+      document.querySelectorAll('.editor-inline-panel.active').forEach(p => p.classList.remove('active'));
+      el.classList.add('active');
+    }
+  }
+
+  closeEditorPanel(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('active');
+  }
   toggleSecondaryToolbar() {
     const isVisible = document.getElementById('toolbar-secondary-row')?.style.display === 'flex';
     this.toggleSubToolbar(isVisible ? null : 'toolbar-secondary-row');
@@ -1814,6 +1938,7 @@ class App {
           this.db.addNote(verseData.book, verseData.chapter, verseData.vNum, verseData.text, note, title);
         }
         this.showToast("Nota guardada con éxito");
+        if (this.currentUser) this.sync.syncAll(this.db);
 
         if (this.noteSource === 'reader' && this.selectedVerse) {
           const { book, chapter, vNum } = this.selectedVerse;
@@ -1837,6 +1962,7 @@ class App {
       () => {
         this.db.deleteNote(index);
         this.renderNotes();
+        if (this.currentUser) this.sync.syncAll(this.db);
       }
     );
   }
@@ -1848,6 +1974,7 @@ class App {
       () => {
         this.db.deleteFavorite(index);
         this.renderFavorites();
+        if (this.currentUser) this.sync.syncAll(this.db);
       }
     );
   }
@@ -1872,6 +1999,12 @@ class App {
       extraEl.style.display = 'none';
       extraEl.className = 'confirm-extra-panel';
       extraEl.innerHTML = '';
+    }
+
+    if (btnOk) btnOk.style.display = 'block';
+    if (btnCancel) {
+        btnCancel.style.display = 'block';
+        btnCancel.innerText = "Cancelar";
     }
 
     if (okText === null) {
@@ -1900,6 +2033,67 @@ class App {
   closeConfirmModal() {
     const modal = document.querySelector('#confirm-modal');
     if (modal) modal.classList.remove('active');
+  }
+
+  openPrivacyPolicyModal() {
+    try {
+      let modal = document.getElementById('privacy-modal');
+      
+      // Si no existe el modal en el DOM, lo creamos dinámicamente
+      if (!modal) {
+        const modalHtml = `
+          <div id="privacy-modal" class="modal-overlay" style="display: none; z-index: 2000000; padding: 1rem;">
+            <div class="modal-box" style="max-width: 440px; width: 100%; padding: 1.25rem; border-radius: 20px;">
+              <h2 class="modal-title" style="font-family: 'Playfair Display', serif; color: var(--accent); margin-bottom: 0.8rem; text-align: center; font-size: 1.6rem;">Política de Privacidad</h2>
+              <div id="privacy-content" style="max-height: 65vh; overflow-y: auto; margin-bottom: 1rem; width: 100%;">
+                <div style="text-align: left; color: var(--text-main); line-height: 1.6; width: 100%;">
+                  <p style="margin-bottom: 1rem; font-weight: 800; border-bottom: 1.5px solid var(--accent); padding-bottom: 0.4rem; color: var(--accent); font-size: 1.1rem; width: 100%;">Transparencia y Seguridad</p>
+                  <ul style="padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.95rem; list-style-type: disc; margin-bottom: 1rem;">
+                    <li><b>Privacidad Local:</b> Tus datos son tuyos. Se guardan primero en tu dispositivo para máxima rapidez.</li>
+                    <li><b>Ética de Datos:</b> No existe rastreo externo ni venta de información a terceros. Privacidad garantizada.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="modal-actions" style="margin-top: 0.5rem;">
+                <button class="modal-btn primary" onclick="window.app.closePrivacyPolicyModal()" style="width: 100%; height: 50px; border-radius: 14px; font-weight: 800; background: var(--accent); color: white; border: none; font-size: 1rem; box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.2);">Entendido</button>
+              </div>
+            </div>
+          </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        modal = document.getElementById('privacy-modal');
+      }
+
+      if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.add('active');
+        if (typeof this.refreshIcons === 'function') this.refreshIcons();
+      }
+    } catch (e) {
+      console.error("Fallo crítico al abrir privacidad:", e);
+      // Fallback a alert si todo falla (extremo)
+      alert("Política de Privacidad: Tus datos están seguros con Appwrite. No compartimos información con terceros.");
+    }
+  }
+
+  closePrivacyPolicyModal() {
+    const modal = document.getElementById('privacy-modal');
+    if (modal) {
+      modal.classList.remove('active');
+      modal.style.display = 'none';
+    }
+  }
+
+  togglePasswordVisibility(id, btn) {
+    const input = document.getElementById(id);
+    if (!input) return;
+    
+    const isPassword = input.getAttribute('type') === 'password';
+    input.setAttribute('type', isPassword ? 'text' : 'password');
+    
+    // Cambiar icono
+    btn.innerHTML = createIcon(isPassword ? 'eye-off' : 'eye');
+    this.refreshIcons(); // Para que Lucide procese el nuevo icono
   }
 
   openEditNote(index) {
@@ -2032,15 +2226,31 @@ class App {
         <!-- SECCIÓN: ACTUALIZACIONES -->
         <div style="margin-bottom: 2rem;">
           <h3 style="margin-bottom: 1.25rem; opacity: 0.6; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 800; color:var(--accent);">Actualizaciones</h3>
-          <div class="premium-card" onclick="window.app.checkForUpdates()" style="padding: 1.25rem; flex-direction: row; justify-content: space-between; align-items: center;">
+          <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <div class="premium-card" onclick="window.app.checkForUpdates()" style="padding: 1.25rem; flex-direction: row; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                  <div style="color: var(--accent);">${createIcon('download-cloud')}</div>
+                  <div style="display: flex; flex-direction: column; text-align:left;">
+                    <span style="font-size: 0.9rem; font-weight: 700;">Buscar Actualizaciones</span>
+                    <span style="font-size: 0.8rem; opacity: 0.6;">Versión actual: v${this.appVersion}</span>
+                  </div>
+                </div>
+                <div style="opacity: 0.4;">${createIcon('chevron-right')}</div>
+            </div>
+
+            <label class="premium-card" style="padding: 1.25rem; flex-direction: row; justify-content: space-between; align-items: center; cursor: pointer; display: flex !important;">
               <div style="display: flex; align-items: center; gap: 1rem;">
-                <div style="color: var(--accent);">${createIcon('download-cloud')}</div>
-                <div style="display: flex; flex-direction: column; text-align:left;">
-                  <span style="font-size: 0.9rem; font-weight: 700;">Buscar Actualizaciones</span>
-                  <span style="font-size: 0.8rem; opacity: 0.6;">Versión actual: v${this.appVersion}</span>
+                <div style="color: var(--accent);">${createIcon('book-open-check')}</div>
+                <div style="display: flex; flex-direction: column; text-align: left;">
+                  <span style="font-size: 0.9rem; font-weight: 700;">Actualizar textos bíblicos</span>
+                  <span style="font-size: 0.8rem; opacity: 0.6;">Descarga correcciones al iniciar la app</span>
                 </div>
               </div>
-              <div style="opacity: 0.4;">${createIcon('chevron-right')}</div>
+              <div class="switch">
+                <input type="checkbox" id="bible-auto-update-toggle" ${this.db.settings.bible_auto_update !== false ? 'checked' : ''} onchange="window.app.toggleBibleAutoUpdate(this.checked)">
+                <span class="slider round"></span>
+              </div>
+            </label>
           </div>
         </div>
 
@@ -2077,6 +2287,14 @@ class App {
     `;
     this.render(html);
     this.updateFloatingNavState();
+  }
+
+  toggleBibleAutoUpdate(active) {
+    this.db.settings.bible_auto_update = active;
+    this.db.saveSettings();
+    this.showToast(active
+      ? '📖 Actualización automática activada'
+      : '📴 Actualización automática desactivada');
   }
 
   toggleSystemTheme(active) {
@@ -2218,7 +2436,10 @@ class App {
       // Restaurar barra principal si estamos en la vista de favoritos y no estamos navegando fuera
       if (!skipNavRestore && this.currentView === 'favorites') {
         const mainNav = document.getElementById('main-floating-nav');
-        if (mainNav) mainNav.classList.remove('hidden');
+        if (mainNav) {
+          mainNav.classList.remove('hidden');
+          this.updateFloatingNavState();
+        }
       }
     }
   }
@@ -2243,6 +2464,7 @@ class App {
         this.db.deleteFavorite(index);
         this.clearFavoriteSelection();
         this.renderFavorites();
+        if (this.currentUser) this.sync.syncAll(this.db);
       }
     );
   }
@@ -2258,15 +2480,18 @@ class App {
     this.currentView = 'favorites';
     this.selectedFavoriteIndex = null;
 
-    // Create a mapped list with original indices to avoid selection bugs
-    let favs = this.db.favorites.map((f, i) => ({ ...f, originalIndex: i }));
+    // Create a mapped list with original indices and filter by isDeleted
+    let favs = this.db.favorites
+      .map((f, i) => ({ ...f, originalIndex: i }))
+      .filter(f => !f.isDeleted);
 
     favs.sort((a, b) => {
       // First sort by pinned status
       if (a.pinned !== b.pinned) return b.pinned ? 1 : -1;
 
-      const d1 = new Date(a.dateCreated || a.date);
-      const d2 = new Date(b.dateCreated || b.date);
+      const getSafeTime = (val) => { const t = new Date(val).getTime(); return isNaN(t) ? 0 : t; };
+      const d1 = getSafeTime(a.dateCreated || a.date);
+      const d2 = getSafeTime(b.dateCreated || b.date);
       return this.favoritesSortOrder === 'asc' ? d1 - d2 : d2 - d1;
     });
 
@@ -2330,6 +2555,7 @@ class App {
     this.clearFavoriteSelection();
     this.renderFavorites();
     this.showToast("Estado de fijación actualizado");
+    if (this.currentUser) this.sync.syncAll(this.db);
   }
 
 
@@ -2367,27 +2593,8 @@ class App {
     } else {
       this.db.addHighlight(book, chapter, vNum, text, color);
     }
-
-    // Direct DOM update to avoid scroll jump
-    const verseEl = document.getElementById(`v-${vNum}`);
-    if (verseEl) {
-      const textEl = verseEl.querySelector('.verse-text');
-      if (textEl) {
-        if (color === 'transparent') {
-          textEl.style.backgroundColor = 'transparent';
-          textEl.style.color = 'inherit';
-          textEl.style.padding = '0';
-          textEl.style.borderRadius = '0';
-        } else {
-          textEl.style.backgroundColor = color;
-          textEl.style.color = '#333';
-          textEl.style.padding = '2px 4px';
-          textEl.style.borderRadius = '4px';
-          textEl.style.boxDecorationBreak = 'clone';
-          textEl.style.webkitBoxDecorationBreak = 'clone';
-        }
-      }
-    }
+    this.renderReader(book, chapter);
+    if (this.currentUser) this.sync.syncAll(this.db);
 
     // Close selection
     this.clearSelection();
@@ -2400,12 +2607,13 @@ class App {
 
   renderHighlights() {
     this.currentView = 'highlights';
-    let list = [...this.db.highlights];
+    let list = this.db.highlights.filter(h => !h.isDeleted);
 
     // Ordenar por fecha
     list.sort((a, b) => {
-      const d1 = new Date(a.dateCreated || a.date);
-      const d2 = new Date(b.dateCreated || b.date);
+      const getSafeTime = (val) => { const t = new Date(val).getTime(); return isNaN(t) ? 0 : t; };
+      const d1 = getSafeTime(a.dateCreated || a.date);
+      const d2 = getSafeTime(b.dateCreated || b.date);
       return this.highlightsSortOrder === 'asc' ? d1 - d2 : d2 - d1;
     });
 
@@ -2532,7 +2740,10 @@ class App {
       bar.style.display = 'none';
       if (!skipNavRestore && this.currentView === 'highlights') {
         const mainNav = document.getElementById('main-floating-nav');
-        if (mainNav) mainNav.classList.remove('hidden');
+        if (mainNav) {
+          mainNav.classList.remove('hidden');
+          this.updateFloatingNavState();
+        }
       }
     }
   }
@@ -2557,6 +2768,7 @@ class App {
         this.db.deleteHighlight(index);
         this.clearHighlightSelection();
         this.renderHighlights();
+        if (this.currentUser) this.sync.syncAll(this.db);
       }
     );
   }
@@ -2568,6 +2780,7 @@ class App {
       () => {
         this.db.deleteHighlight(index);
         this.renderHighlights();
+        if (this.currentUser) this.sync.syncAll(this.db);
       }
     );
   }
@@ -2579,13 +2792,15 @@ class App {
 
   renderNotes() {
     this.currentView = 'notes';
-    let notes = this.db.notes.map((n, i) => ({ ...n, originalIndex: i }));
-
+    let notes = this.db.notes
+      .map((n, i) => ({ ...n, originalIndex: i }))
+      .filter(n => !n.isDeleted);
     // Ordenar: Pinned primero, luego por fecha según el orden seleccionado
     notes.sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-      const d1 = new Date(a.dateCreated || a.date);
-      const d2 = new Date(b.dateCreated || b.date);
+      const getSafeTime = (val) => { const t = new Date(val).getTime(); return isNaN(t) ? 0 : t; };
+      const d1 = getSafeTime(a.dateCreated || a.date || a.$createdAt || Date.now());
+      const d2 = getSafeTime(b.dateCreated || b.date || b.$createdAt || Date.now());
       return this.notesSortOrder === 'asc' ? d1 - d2 : d2 - d1;
     });
 
@@ -2628,9 +2843,9 @@ class App {
                 <div style="display: flex; flex-direction: column; gap: 0.2rem; text-align: left; flex: 1; min-width: 0;">
                   <span style="font-weight: 700; font-size: 1.05rem; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem; width: 100%;">
                     ${note.pinned ? `<span style="color: var(--accent); scale: 0.8; display: flex; flex-shrink: 0;">${createIcon('pin')}</span>` : ''}
-                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${note.title}</span>
+                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${note.title || 'Nota sin título'}</span>
                   </span>
-                  <span style="font-size: 0.8rem; opacity: 0.5; font-weight: 600;">${new Date(note.dateCreated || note.date).toLocaleDateString()}</span>
+                  <span style="font-size: 0.8rem; opacity: 0.5; font-weight: 600;">${this.formatNoteDate(note.dateCreated || note.date || note.dateUpdated || note.$createdAt)}</span>
                 </div>
                 <div style="color: var(--accent); opacity: 0.3; flex-shrink: 0; display: flex;">${createIcon('chevron-right')}</div>
               </div>
@@ -2642,6 +2857,38 @@ class App {
     this.render(html);
     this.refreshIcons();
     this.updateFloatingNavState();
+  }
+
+  formatNoteDate(dateInput) {
+    if (!dateInput) return 'Sin fecha';
+    try {
+      let date;
+      if (typeof dateInput === 'number') {
+        date = new Date(dateInput);
+      } else if (typeof dateInput === 'string') {
+        if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(dateInput)) {
+          return dateInput;
+        }
+        date = new Date(dateInput);
+      } else if (dateInput instanceof Date) {
+        date = dateInput;
+      } else {
+        return String(dateInput);
+      }
+
+      if (isNaN(date.getTime())) {
+        return String(dateInput);
+      }
+
+      return date.toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (e) {
+      console.warn('Error formatting date:', e);
+      return String(dateInput || 'Sin fecha');
+    }
   }
 
   stripHtml(html) {
@@ -2748,6 +2995,7 @@ class App {
       if (window.vibrate) window.vibrate(40);
       this.showToast(isPinned ? 'Nota fijada' : 'Nota desfijada');
       this.renderNotes();
+      if (this.currentUser) this.sync.syncAll(this.db);
     } else if (finalDiffX > 70) {
       // Swipe derecha → Eliminar con confirmación
       if (window.vibrate) window.vibrate(40);
@@ -2768,6 +3016,7 @@ class App {
       () => {
         this.db.deleteNote(index);
         this.renderNotes();
+        if (this.currentUser) this.sync.syncAll(this.db);
       }
     );
   }
@@ -3002,18 +3251,13 @@ class App {
         <h1>Diccionario</h1>
       </header>
       <div class="view-container animate-entrance">
-        <div style="position: relative; margin-bottom: 1.5rem;">
+        <div style="position: relative; margin-bottom: 1.25rem;">
           <input type="text" id="dict-input" placeholder="¿Qué término buscas?..." class="search-box" style="margin-bottom: 0;">
           <button id="clear-dict" style="position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--accent); cursor: pointer; display: none;">
             ${createIcon('x-circle')}
           </button>
         </div>
-        <div id="dict-results">
-            <div style="text-align: center; opacity: 0.5; margin-top: 3rem;">
-                ${createIcon('book-a')}
-                <p style="margin-top: 1rem;">Busca palabras bíblicas y significados</p>
-            </div>
-        </div>
+        <div id="dict-results"></div>
       </div>
     `;
     this.render(html);
@@ -3030,30 +3274,81 @@ class App {
       clearBtn.style.display = 'none';
       this.performDictSearch('');
     });
+
+    this.performDictSearch('');
     this.updateFloatingNavState();
   }
 
   performDictSearch(query) {
     const resultsEl = document.querySelector('#dict-results');
-    if (!query) {
+    if (!resultsEl) return;
+
+    const results = this.db.searchDictionary(query || '');
+    this.currentDictSearch = results;
+
+    if (results.length === 0) {
       resultsEl.innerHTML = `
-            <div style="text-align: center; opacity: 0.5; margin-top: 3rem;">
-                ${createIcon('book-a')}
-                <p style="margin-top: 1rem;">Busca palabras bíblicas y significados</p>
-            </div>
-        `;
+        <div style="text-align: center; opacity: 0.5; margin-top: 3rem;">
+          ${createIcon('book-x')}
+          <p style="margin-top: 1rem;">No se encontraron términos para "${query}"</p>
+        </div>
+      `;
+      this.refreshIcons();
       return;
     }
-    const results = this.db.searchDictionary(query);
+
+    const isInitial = !query || query.trim() === '';
+    const displayList = isInitial ? results.slice(0, 35) : results;
+
     resultsEl.innerHTML = `
-      <p style="margin-bottom: 1rem; opacity: 0.5; font-size: 0.85rem;">${results.length} definiciones encontradas</p>
-      ${results.map(r => `
-        <div class="premium-card animate-entrance" style="margin-bottom: 1.25rem; align-items: flex-start; text-align: left; padding: 1.5rem; background: var(--bg-color); border-color: var(--accent-soft);">
-          <h3 style="color: var(--accent); margin-bottom: 0.75rem; font-size: 1.2rem; font-family: 'Playfair Display', serif;">${r.term}</h3>
-          <p style="font-size: 1rem; line-height: 1.7; color: var(--text-main); font-weight: 400;">${r.definition}</p>
-        </div>
-      `).join('')}
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.85rem; padding: 0 0.2rem;">
+        <span style="opacity: 0.65; font-size: 0.82rem; font-weight: 700;">
+          ${isInitial ? `Términos Principales (${results.length} disponibles)` : `${results.length} término${results.length > 1 ? 's' : ''} encontrado${results.length > 1 ? 's' : ''}`}
+        </span>
+        <span style="font-size: 0.72rem; font-weight: 800; color: var(--accent); letter-spacing: 0.5px;">
+          Toca para ver definición
+        </span>
+      </div>
+      <div class="dict-grid">
+        ${displayList.map((r, idx) => `
+          <div class="dict-word-card animate-entrance" onclick="window.app.openDictWordModalByIndex(${idx})">
+            <div class="dict-word-info">
+              <div class="dict-word-term">${r.term}</div>
+              <div class="dict-word-preview">${r.definition}</div>
+            </div>
+            <div style="color: var(--accent); opacity: 0.8; margin-left: 0.5rem; display: flex; align-items: center; font-size: 1.1rem;">
+              ${createIcon('chevron-right')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
     `;
+    this.refreshIcons();
+  }
+
+  openDictWordModalByIndex(index) {
+    if (!this.currentDictSearch || !this.currentDictSearch[index]) return;
+    const { term, definition } = this.currentDictSearch[index];
+    this.openDictWordModal(term, definition);
+  }
+
+  openDictWordModal(term, definition) {
+    const modal = document.querySelector('#dict-word-modal');
+    if (!modal) return;
+
+    const termEl = document.querySelector('#dict-modal-term');
+    const defEl = document.querySelector('#dict-modal-def');
+
+    if (termEl) termEl.innerText = term;
+    if (defEl) defEl.innerText = definition;
+
+    this.refreshIcons();
+    modal.classList.add('active');
+  }
+
+  closeDictWordModal() {
+    const modal = document.querySelector('#dict-word-modal');
+    if (modal) modal.classList.remove('active');
   }
 
   renderAbout() {
@@ -3093,6 +3388,9 @@ class App {
                 ${createIcon('github')} GitHub
               </a>
             </div>
+            <button onclick="window.app.openPrivacyPolicyModal()" class="about-action-btn" style="background: #2b384e; color: #ffffff; border: none; margin-top: 0.5rem;">
+                ${createIcon('shield-check')} Política de Privacidad
+            </button>
           </div>
 
           <div style="height: 1px; background: var(--glass-border); width: 40%; margin: 0.5rem auto;"></div>
@@ -4037,125 +4335,101 @@ class App {
           ${createIcon('map-pin')}
         </button>
       </header>
-      <div class="view-container animate-entrance" style="display: flex; flex-direction: column; gap: 1.5rem; align-items: center;">
-        <div id="vod-card" class="premium-card" style="width: 100%; min-height: 300px; justify-content: center; background-size: cover; background-position: center; color: white; text-shadow: 0 2px 10px rgba(0,0,0,0.5); padding: 2.5rem; position: relative; border: none;">
-            <div style="position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.3); z-index: 1; border-radius: var(--radius);"></div>
-            <div id="vod-content" style="z-index: 2; position: relative;">
-                <p style="font-size: 1.25rem; font-style: italic; line-height: 1.6; margin-bottom: 1.5rem; font-family: 'Playfair Display', serif;">Cargando versículo...</p>
-                <div style="font-weight: 700; color: var(--accent); font-size: 0.9rem;">REINA VALERA 1960</div>
-            </div>
+      <div class="view-container animate-entrance" style="display: flex; flex-direction: column; gap: 1.25rem; align-items: center;">
+        <div id="vod-card">
+          <div id="vod-content" style="z-index: 2; position: relative;">
+            <p style="font-size: 1.35rem; font-style: italic; line-height: 1.6; font-family: 'Playfair Display', serif; color: white;">Cargando versículo...</p>
+          </div>
         </div>
 
-        <div style="width: 100%;">
-          <p style="font-size: 0.8rem; opacity: 0.6; margin-bottom: 0.75rem; font-weight: 600; text-transform: uppercase;">Seleccionar Fondo</p>
-          <div id="bg-selector" style="display: flex; overflow-x: auto; gap: 0.75rem; padding-bottom: 0.5rem; scrollbar-width: none;">
-            ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(i => `
-              <div class="bg-thumb" onclick="window.app.changeVodBg(${i})" 
-                   style="min-width: 60px; height: 60px; border-radius: 12px; background-image: url('/img/bg-verse-${i}.png'); background-size: cover; border: 2px solid var(--glass-border); flex-shrink: 0;">
-              </div>
-            `).join('')}
-            <div class="bg-thumb premium-card" onclick="window.app.openCustomBgDisclaimer()" 
-                 style="min-width: 60px; height: 60px; border-radius: 12px; border: 2px dashed var(--accent); flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--card-bg); color: var(--accent); padding:0;">
-              ${createIcon('plus')}
-            </div>
-            <input type="file" id="custom-bg-input" accept="image/*" style="display:none" onchange="window.app.handleCustomBgChange(event)">
-          </div>
-        </div>
-        
-        <div style="width: 100%;">
-          <p style="font-size: 0.8rem; opacity: 0.6; margin-bottom: 0.75rem; font-weight: 600; text-transform: uppercase;">Diseño y Acciones</p>
-          <div style="display: flex; align-items: center; justify-content: space-between; background: var(--card-bg); padding: 0.75rem 1rem; border-radius: 20px; border: 1px solid var(--glass-border);">
-            <div style="display: flex; gap: 0.5rem;">
-              <button class="design-btn ${this.currentVodDesign === 1 ? 'active' : ''}" onclick="window.app.changeVodDesign(1)" title="Clásico" style="width:36px; height:36px; border-radius:10px; border:none; background:${this.currentVodDesign === 1 ? 'var(--accent)' : 'var(--accent-soft)'}; color:${this.currentVodDesign === 1 ? 'white' : 'var(--accent)'}; display:flex; align-items:center; justify-content:center;">${createIcon('align-center')}</button>
-              <button class="design-btn ${this.currentVodDesign === 2 ? 'active' : ''}" onclick="window.app.changeVodDesign(2)" title="Moderno" style="width:36px; height:36px; border-radius:10px; border:none; background:${this.currentVodDesign === 2 ? 'var(--accent)' : 'var(--accent-soft)'}; color:${this.currentVodDesign === 2 ? 'white' : 'var(--accent)'}; display:flex; align-items:center; justify-content:center;">${createIcon('align-left')}</button>
-              <button class="design-btn ${this.currentVodDesign === 3 ? 'active' : ''}" onclick="window.app.changeVodDesign(3)" title="Elegante" style="width:36px; height:36px; border-radius:10px; border:none; background:${this.currentVodDesign === 3 ? 'var(--accent)' : 'var(--accent-soft)'}; color:${this.currentVodDesign === 3 ? 'white' : 'var(--accent)'}; display:flex; align-items:center; justify-content:center;">${createIcon('square-dashed-bottom-code')}</button>
-            </div>
-            <div style="width:1px; height:24px; background:var(--glass-border); margin:0 0.5rem;"></div>
-            <div style="display: flex; gap: 0.5rem;">
-              <button onclick="window.app.handleCopyVod()" title="Copiar Texto" style="width:40px; height:40px; border-radius:50%; border:1px solid var(--accent); background:none; color:var(--accent); display:flex; align-items:center; justify-content:center;">${createIcon('copy')}</button>
-              <button onclick="window.app.showShareOptions()" title="Compartir Imagen" style="width:40px; height:40px; border-radius:50%; border:none; background:var(--accent); color:white; display:flex; align-items:center; justify-content:center;">${createIcon('share-2')}</button>
-            </div>
-          </div>
-        </div>
+        <button class="vod-action-btn primary" onclick="window.app.openVodShareModal()" style="width:100%; margin-top:0.25rem;">
+          ${createIcon('share-2')} Personalizar y Compartir
+        </button>
       </div>
     `;
     this.render(html);
+    this.refreshIcons();
     this.loadDailyVerse();
   }
 
   renderShareVerse(verseData) {
     this.currentView = 'share-verse';
-    this.currentVod = verseData; // Reutilizamos para no duplicar lógica de canvas
+    this.currentVod = { ...verseData, isVod: false };
 
     const html = `
       <header>
         <button class="btn-icon" onclick="window.pendingVerseScroll='${verseData.vNum}'; window.app.renderReader('${verseData.book}', '${verseData.chapter}')">${createIcon('chevron-left')}</button>
-        <h1>Compartir</h1>
+        <h1 style="flex-grow: 1;">Compartir Versículo</h1>
       </header>
-      <div class="view-container animate-entrance" style="display: flex; flex-direction: column; gap: 1.5rem; align-items: center;">
-        <div id="vod-card" class="premium-card" style="width: 100%; min-height: 300px; justify-content: center; background-size: cover; background-position: center; color: white; text-shadow: 0 2px 10px rgba(0,0,0,0.5); padding: 2.5rem; position: relative; border: none;">
-            <div style="position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.3); z-index: 1; border-radius: var(--radius);"></div>
-            <div id="vod-content" style="z-index: 2; position: relative;">
-                 <p style="font-size: 1.4rem; font-style: italic; line-height: 1.6; margin-bottom: 1.5rem; font-family: 'Playfair Display', serif;">
-                    "${verseData.text}"
-                </p>
-                <div style="font-weight: 700; color: #fff; font-size: 1.1rem; margin-bottom: 0.25rem;">${verseData.ref}</div>
-                <div style="font-weight: 700; color: var(--accent); font-size: 0.8rem; letter-spacing: 1px;">REINA VALERA 1960</div>
-            </div>
-        </div>
-
-        <div style="width: 100%;">
-          <p style="font-size: 0.8rem; opacity: 0.6; margin-bottom: 0.75rem; font-weight: 600; text-transform: uppercase;">Seleccionar Fondo</p>
-          <div id="bg-selector" style="display: flex; overflow-x: auto; gap: 0.75rem; padding-bottom: 0.5rem; scrollbar-width: none;">
-            ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(i => `
-              <div class="bg-thumb" onclick="window.app.changeVodBg(${i})" 
-                   style="min-width: 60px; height: 60px; border-radius: 12px; background-image: url('/img/bg-verse-${i}.png'); background-size: cover; border: 2px solid var(--glass-border); flex-shrink: 0;">
-              </div>
-            `).join('')}
-            <div class="bg-thumb premium-card" onclick="window.app.openCustomBgDisclaimer()" 
-                 style="min-width: 60px; height: 60px; border-radius: 12px; border: 2px dashed var(--accent); flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--card-bg); color: var(--accent); padding:0;">
-              ${createIcon('plus')}
-            </div>
-            <input type="file" id="custom-bg-input" accept="image/*" style="display:none" onchange="window.app.handleCustomBgChange(event)">
+      <div class="view-container animate-entrance" style="display: flex; flex-direction: column; gap: 1.1rem; align-items: center; max-width: 520px; margin: 0 auto; width: 100%;">
+        <div id="vod-card">
+          <div id="vod-content" style="z-index: 2; position: relative;">
+            <p style="font-size: 1.35rem; font-style: italic; line-height: 1.6; font-family: 'Playfair Display', serif; color: white;">
+              "${verseData.text}"
+            </p>
+            <div style="font-weight: 700; color: #fff; font-size: 1.1rem; margin-bottom: 0.25rem;">${verseData.ref}</div>
+            <div style="font-weight: 700; color: var(--accent); font-size: 0.8rem; letter-spacing: 1px;">REINA VALERA 1960</div>
           </div>
         </div>
-        
-        <div style="width: 100%;">
-          <p style="font-size: 0.8rem; opacity: 0.6; margin-bottom: 0.75rem; font-weight: 600; text-transform: uppercase;">Diseño y Compartir</p>
-          <div style="display: flex; align-items: center; justify-content: space-between; background: var(--card-bg); padding: 0.75rem 1rem; border-radius: 20px; border: 1px solid var(--glass-border);">
-            <div style="display: flex; gap: 0.5rem;">
-              <button class="design-btn ${this.currentVodDesign === 1 ? 'active' : ''}" onclick="window.app.changeVodDesign(1)" title="Clásico" style="width:36px; height:36px; border-radius:10px; border:none; background:${this.currentVodDesign === 1 ? 'var(--accent)' : 'var(--accent-soft)'}; color:${this.currentVodDesign === 1 ? 'white' : 'var(--accent)'}; display:flex; align-items:center; justify-content:center;">${createIcon('align-center')}</button>
-              <button class="design-btn ${this.currentVodDesign === 2 ? 'active' : ''}" onclick="window.app.changeVodDesign(2)" title="Moderno" style="width:36px; height:36px; border-radius:10px; border:none; background:${this.currentVodDesign === 2 ? 'var(--accent)' : 'var(--accent-soft)'}; color:${this.currentVodDesign === 2 ? 'white' : 'var(--accent)'}; display:flex; align-items:center; justify-content:center;">${createIcon('align-left')}</button>
-              <button class="design-btn ${this.currentVodDesign === 3 ? 'active' : ''}" onclick="window.app.changeVodDesign(3)" title="Elegante" style="width:36px; height:36px; border-radius:10px; border:none; background:${this.currentVodDesign === 3 ? 'var(--accent)' : 'var(--accent-soft)'}; color:${this.currentVodDesign === 3 ? 'white' : 'var(--accent)'}; display:flex; align-items:center; justify-content:center;">${createIcon('square-dashed-bottom-code')}</button>
+
+        <div class="vod-controls-container">
+          <div class="vod-control-card">
+            <div class="vod-control-title">${createIcon('image')} Fondo de Imagen</div>
+            <div id="bg-selector" style="display: flex; overflow-x: auto; gap: 0.75rem; padding-bottom: 0.25rem; scrollbar-width: none;">
+              ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(i => `
+                <div class="vod-bg-thumb ${this.currentVodBg.includes(`bg-verse-${i}.png`) ? 'active' : ''}" data-bg-index="${i}" onclick="window.app.changeVodBg(${i})" 
+                     style="background-image: url('/img/bg-verse-${i}.png');">
+                </div>
+              `).join('')}
+              <div class="vod-bg-thumb" onclick="window.app.openCustomBgDisclaimer()" 
+                   style="border: 2px dashed var(--accent); display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent);">
+                ${createIcon('plus')}
+              </div>
+              <input type="file" id="custom-bg-input" accept="image/*" style="display:none" onchange="window.app.handleCustomBgChange(event)">
             </div>
-            
-            <div style="display: flex; gap: 0.75rem; justify-content: flex-end; align-items: center;">
-              <button onclick="window.app.copyVodToClipboard()" title="Copiar Texto" style="width:40px; height:40px; border-radius:50%; border:1px solid var(--accent); background:none; color:var(--accent); display:flex; align-items:center; justify-content:center;">
-                ${createIcon('copy')}
+          </div>
+
+          <div class="vod-control-card">
+            <div class="vod-control-title">${createIcon('layout')} Estilo de Diseño</div>
+            <div class="vod-segmented-control">
+              <button class="vod-segment-btn ${this.currentVodDesign === 1 ? 'active' : ''}" onclick="window.app.changeVodDesign(1)">
+                ${createIcon('align-center')} Clásico
               </button>
-              <button onclick="window.app.showShareOptions()" title="Compartir Imagen" style="width:40px; height:40px; border-radius:50%; border:none; background:var(--accent); color:white; display:flex; align-items:center; justify-content:center;">
-                ${createIcon('share-2')}
+              <button class="vod-segment-btn ${this.currentVodDesign === 2 ? 'active' : ''}" onclick="window.app.changeVodDesign(2)">
+                ${createIcon('align-left')} Moderno
+              </button>
+              <button class="vod-segment-btn ${this.currentVodDesign === 3 ? 'active' : ''}" onclick="window.app.changeVodDesign(3)">
+                ${createIcon('square-dashed-bottom-code')} Elegante
               </button>
             </div>
+          </div>
+
+          <div class="vod-actions-grid">
+            <button class="vod-action-btn secondary" onclick="window.app.handleCopyVod()">
+              ${createIcon('copy')} Copiar Texto
+            </button>
+            <button class="vod-action-btn primary" onclick="window.app.shareVerse('image')">
+              ${createIcon('share-2')} Compartir Imagen
+            </button>
           </div>
         </div>
       </div>
     `;
     this.render(html);
     this.refreshIcons();
-    this.updateVodUI(); // Previsualizar diseño inmediatamente
-    this.changeVodBg(1); // Default bg
+    this.updateVodUI();
   }
 
   changeVodDesign(designIndex) {
     this.currentVodDesign = designIndex;
     this.updateVodUI();
 
-    // Actualizar botones de diseño visualmente
-    document.querySelectorAll('.design-btn').forEach((btn, idx) => {
-      const isActive = idx + 1 === designIndex;
-      btn.style.background = isActive ? 'var(--accent)' : 'var(--accent-soft)';
-      btn.style.color = isActive ? 'white' : 'var(--accent)';
+    // Actualizar todos los botones de segmento (pueden estar en el modal o en la vista)
+    document.querySelectorAll('#vod-share-design-ctrl .vod-segment-btn').forEach((btn, idx) => {
+      btn.classList.toggle('active', idx + 1 === designIndex);
+    });
+    document.querySelectorAll('.vod-segmented-control:not(#vod-share-design-ctrl) .vod-segment-btn').forEach((btn, idx) => {
+      btn.classList.toggle('active', idx + 1 === designIndex);
     });
   }
 
@@ -4165,15 +4439,167 @@ class App {
     } else {
       this.currentVodBg = `/img/bg-verse-${index}.png`;
     }
-    const card = document.querySelector('#vod-card');
-    if (card) card.style.backgroundImage = `url('${this.currentVodBg}')`;
-    document.querySelectorAll('.bg-thumb').forEach((el, i) => {
-      if (customUrl) {
-        el.style.borderColor = el.onclick?.toString().includes('openCustomBgDisclaimer') ? 'var(--accent)' : 'var(--glass-border)';
+    // Actualizar ambos cards (vista principal y modal)
+    ['#vod-card', '#vod-share-card'].forEach(sel => {
+      const card = document.querySelector(sel);
+      if (card) card.style.backgroundImage = `url('${this.currentVodBg}')`;
+    });
+    document.querySelectorAll('.vod-bg-thumb').forEach((el) => {
+      const bgIdx = el.getAttribute('data-bg-index');
+      if (!customUrl && bgIdx && parseInt(bgIdx) === index) {
+        el.classList.add('active');
       } else {
-        el.style.borderColor = (i + 1 === index) ? 'var(--accent)' : 'var(--glass-border)';
+        el.classList.remove('active');
       }
     });
+  }
+
+  openVodShareModal() {
+    const modal = document.querySelector('#vod-share-modal');
+    if (!modal) return;
+
+    // Clonar el vod-card actual para previsualización en el modal
+    const shareCard = document.querySelector('#vod-share-card');
+    if (shareCard && this.currentVod) {
+      shareCard.style.cssText = `
+        width: 100%; height: 260px; border-radius: 22px;
+        background-size: cover; background-position: center;
+        background-image: url('${this.currentVodBg}');
+        position: relative; overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      `;
+      this.updateVodUIInTarget(shareCard);
+    }
+
+    // Poblar selector de fondos
+    const bgRow = document.querySelector('#vod-share-bg-selector');
+    if (bgRow && bgRow.children.length === 0) {
+      let bgHtml = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].map(i =>
+        `<div class="vod-bg-thumb ${this.currentVodBg.includes(`bg-verse-${i}`) ? 'active' : ''}" data-bg-index="${i}" onclick="window.app.changeVodBgInModal(${i})" style="background-image: url('/img/bg-verse-${i}.png');"></div>`
+      ).join('');
+      bgHtml += `<div class="vod-bg-thumb" onclick="window.app.openCustomBgDisclaimer()" style="border:2px dashed var(--accent); display:flex; align-items:center; justify-content:center; background:var(--accent-soft); color:var(--accent);"><i data-lucide="plus"></i></div>`;
+      bgRow.innerHTML = bgHtml;
+    }
+
+    // Sincronizar diseño activo en el modal
+    document.querySelectorAll('#vod-share-design-ctrl .vod-segment-btn').forEach((btn, idx) => {
+      btn.classList.toggle('active', idx + 1 === this.currentVodDesign);
+    });
+
+    this.refreshIcons();
+    modal.classList.add('active');
+  }
+
+  closeVodShareModal() {
+    const modal = document.querySelector('#vod-share-modal');
+    if (modal) modal.classList.remove('active');
+  }
+
+  changeVodBgInModal(index) {
+    this.currentVodBg = `/img/bg-verse-${index}.png`;
+    const shareCard = document.querySelector('#vod-share-card');
+    if (shareCard) shareCard.style.backgroundImage = `url('${this.currentVodBg}')`;
+    const mainCard = document.querySelector('#vod-card');
+    if (mainCard) mainCard.style.backgroundImage = `url('${this.currentVodBg}')`;
+    document.querySelectorAll('.vod-bg-thumb').forEach(el => {
+      const bgIdx = el.getAttribute('data-bg-index');
+      el.classList.toggle('active', bgIdx && parseInt(bgIdx) === index);
+    });
+  }
+
+  updateVodUIInTarget(targetCard) {
+    if (!this.currentVod) return;
+    const design = this.currentVodDesign;
+    const textLength = this.currentVod.text.length;
+    let fontSize = 1.35;
+    if (textLength > 220) fontSize = 1.05;
+    else if (textLength > 150) fontSize = 1.18;
+    else if (textLength > 90) fontSize = 1.25;
+
+    const isVod = this.currentVod.isVod !== false;
+    const headerTitle = isVod
+      ? `${createIcon('sparkles')} Versículo del Día`
+      : `Versículo que cambia vidas`;
+    const thematicText = isVod ? (this.currentVod.thematic || 'PROMESAS').toUpperCase() : '';
+
+    let contentHtml = '';
+    if (design === 1) {
+      targetCard.style.alignItems = 'stretch';
+      targetCard.style.justifyContent = 'space-between';
+      targetCard.style.display = 'flex';
+      targetCard.style.flexDirection = 'column';
+      contentHtml = `
+        <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.82) 100%);z-index:1;border-radius:24px;"></div>
+        <div style="z-index:2;position:relative;display:flex;flex-direction:column;justify-content:space-between;height:100%;width:100%;padding:1.4rem 1.25rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+            <div style="font-weight:800;letter-spacing:1.5px;text-transform:uppercase;font-size:0.72rem;color:rgba(255,255,255,0.92);display:flex;align-items:center;gap:0.35rem;">
+              ${headerTitle}
+            </div>
+            ${thematicText ? `
+            <span style="font-size:0.68rem;font-weight:800;color:#ffffff;background:rgba(255,255,255,0.22);backdrop-filter:blur(8px);padding:0.22rem 0.65rem;border-radius:20px;border:1px solid rgba(255,255,255,0.3);letter-spacing:1px;text-transform:uppercase;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
+              ${thematicText}
+            </span>` : ''}
+          </div>
+          <div style="margin:auto 0;text-align:center;">
+            <p style="font-size:${fontSize}rem;font-style:italic;line-height:1.5;margin-bottom:0.9rem;font-family:'Playfair Display',serif;color:white;text-shadow:0 2px 8px rgba(0,0,0,0.4);">&ldquo;${this.currentVod.text}&rdquo;</p>
+            <div style="font-weight:800;color:var(--accent,#f4c462);font-size:1.1rem;">${this.currentVod.ref}</div>
+            <div style="font-weight:700;color:rgba(255,255,255,0.65);font-size:0.7rem;letter-spacing:1.5px;margin-top:0.15rem;text-transform:uppercase;">REINA VALERA 1960</div>
+          </div>
+        </div>
+      `;
+    } else if (design === 2) {
+      targetCard.style.alignItems = 'stretch';
+      targetCard.style.justifyContent = 'space-between';
+      targetCard.style.display = 'flex';
+      targetCard.style.flexDirection = 'column';
+      contentHtml = `
+        <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(0,0,0,0.94) 0%,rgba(0,0,0,0.64) 70%,rgba(0,0,0,0.18) 100%);z-index:1;border-radius:24px;"></div>
+        <div style="z-index:2;position:relative;display:flex;flex-direction:column;justify-content:space-between;height:100%;width:100%;padding:1.4rem 1.25rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+            <div style="font-weight:800;letter-spacing:1.5px;text-transform:uppercase;font-size:0.72rem;color:rgba(255,255,255,0.92);display:flex;align-items:center;gap:0.35rem;">
+              ${headerTitle}
+            </div>
+            ${thematicText ? `
+            <span style="font-size:0.68rem;font-weight:800;color:#ffffff;background:rgba(255,255,255,0.22);backdrop-filter:blur(8px);padding:0.22rem 0.65rem;border-radius:20px;border:1px solid rgba(255,255,255,0.3);letter-spacing:1px;text-transform:uppercase;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
+              ${thematicText}
+            </span>` : ''}
+          </div>
+          <div style="margin:auto 0;text-align:left;max-width:94%;">
+            <p style="font-size:${fontSize - 0.05}rem;font-style:italic;line-height:1.48;margin-bottom:0.85rem;font-family:'Playfair Display',serif;color:white;text-shadow:0 2px 8px rgba(0,0,0,0.4);">&ldquo;${this.currentVod.text}&rdquo;</p>
+            <div style="display:flex;align-items:center;gap:0.6rem;">
+              <div style="width:30px;height:3px;background:var(--accent,#f4c462);border-radius:2px;"></div>
+              <div style="font-weight:800;color:#fff;font-size:1.1rem;">${this.currentVod.ref}</div>
+            </div>
+            <div style="font-weight:800;color:var(--accent,#f4c462);font-size:0.7rem;letter-spacing:1.5px;margin-left:42px;margin-top:0.15rem;text-transform:uppercase;">REINA VALERA 1960</div>
+          </div>
+        </div>
+      `;
+    } else if (design === 3) {
+      targetCard.style.alignItems = 'center';
+      targetCard.style.justifyContent = 'center';
+      targetCard.style.display = 'flex';
+      contentHtml = `
+        <div style="position:absolute;inset:0;background:rgba(0,0,0,0.2);z-index:1;border-radius:24px;"></div>
+        <div style="z-index:2;position:relative;background:rgba(0,0,0,0.76);border:1px solid rgba(255,255,255,0.22);backdrop-filter:blur(14px);padding:1.3rem 1.2rem;border-radius:20px;width:94%;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.3);display:flex;flex-direction:column;gap:0.6rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+            <div style="font-weight:800;letter-spacing:1.5px;text-transform:uppercase;font-size:0.68rem;color:rgba(255,255,255,0.9);display:flex;align-items:center;gap:0.3rem;">
+              ${headerTitle}
+            </div>
+            ${thematicText ? `
+            <span style="font-size:0.66rem;font-weight:800;color:#ffffff;background:rgba(255,255,255,0.25);padding:0.2rem 0.6rem;border-radius:16px;border:1px solid rgba(255,255,255,0.3);letter-spacing:1px;text-transform:uppercase;">
+              ${thematicText}
+            </span>` : ''}
+          </div>
+          <p style="font-size:${fontSize - 0.05}rem;font-style:italic;line-height:1.45;margin:0.2rem 0;font-family:'Playfair Display',serif;color:white;">&ldquo;${this.currentVod.text}&rdquo;</p>
+          <div>
+            <div style="font-weight:800;color:var(--accent,#f4c462);font-size:1.05rem;">${this.currentVod.ref}</div>
+            <div style="font-weight:600;color:rgba(255,255,255,0.55);font-size:0.68rem;letter-spacing:1.5px;margin-top:0.1rem;text-transform:uppercase;">REINA VALERA 1960</div>
+          </div>
+        </div>
+      `;
+    }
+    targetCard.innerHTML = contentHtml;
+    this.refreshIcons();
   }
 
   openCustomBgDisclaimer() {
@@ -4181,7 +4607,20 @@ class App {
       "Imagen Personalizada",
       "Para una mejor calidad al compartir, te recomendamos usar una imagen con una resolución mínima de 1080x1080 píxeles.",
       () => {
-        document.getElementById('custom-bg-input').click();
+        const input = document.getElementById('vod-share-custom-bg-input')
+                   || document.getElementById('custom-bg-input');
+        if (input) {
+          input.click();
+        } else {
+          const tmp = document.createElement('input');
+          tmp.type = 'file';
+          tmp.accept = 'image/*';
+          tmp.style.display = 'none';
+          tmp.onchange = (e) => this.handleCustomBgChange(e);
+          document.body.appendChild(tmp);
+          tmp.click();
+          tmp.addEventListener('change', () => document.body.removeChild(tmp));
+        }
       },
       "Seleccionar",
       "var(--accent)"
@@ -4225,7 +4664,6 @@ class App {
     const txtText = document.querySelector('#share-modal-txt-text');
     const txtIcon = document.querySelector('#share-modal-txt-icon');
 
-    // Estilo unificado claro para ambos casos (Reader y VOD/ShareVerse)
     if (imgText) imgText.innerText = 'Compartir Imagen';
     if (txtText) {
       txtText.innerText = (this.currentView === 'reader') ? 'Copiar Texto' : 'Compartir como Texto';
@@ -4250,7 +4688,7 @@ class App {
       if (!v) throw new Error('No Bible data');
       this.currentVod = {
         text: v.text,
-        ref: `${v.book} ${v.chapter}:${v.verse}`,
+        ref: `${v.book}, ${v.chapter}:${v.verse}`,
         thematic: v.thematic,
         book: v.book,
         chapter: v.chapter,
@@ -4284,69 +4722,21 @@ class App {
     if (!card || !this.currentVod) return;
 
     card.style.backgroundImage = `url('${this.currentVodBg}')`;
-
-    // Reset estilos base del card (altura fija ya está en CSS pero aseguramos consistencia)
     card.style.display = 'flex';
-    card.style.padding = '2rem';
     card.style.position = 'relative';
-    card.style.height = '400px';
+    card.style.height = '380px';
+    card.style.minHeight = '380px';
+    card.style.padding = '0';
 
-    let contentHtml = '';
-    const design = this.currentVodDesign;
-    const textLength = this.currentVod.text.length;
+    this.updateVodUIInTarget(card);
 
-    // Escala de fuente para preview (base 1.35rem)
-    let fontSize = 1.35;
-    if (textLength > 180) fontSize = 1.05;
-    else if (textLength > 120) fontSize = 1.2;
-
-    if (design === 1) {
-      // DISEÑO 1: CLÁSICO (Centrado)
-      card.style.alignItems = 'center';
-      card.style.justifyContent = 'center';
-
-      contentHtml = `
-        <div style="position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.45); z-index: 1; border-radius: 24px;"></div>
-        <div id="vod-content" style="z-index: 2; position: relative; text-align: center; width: 100%;">
-          <div style="font-weight: 800; letter-spacing: 2px; text-transform: uppercase; font-size: 0.7rem; margin-bottom: 0.75rem; opacity: 0.8; color: white;">${this.currentVod.thematic || ''}</div>
-          <p style="font-size: ${fontSize}rem; font-style: italic; line-height: 1.6; margin-bottom: 1.5rem; font-family: 'Playfair Display', serif; color: white;">"${this.currentVod.text}"</p>
-          <div style="font-weight: 700; color: #fff; font-size: 1.05rem; margin-bottom: 0.2rem;">${this.currentVod.ref}</div>
-          <div style="font-weight: 800; color: var(--accent); font-size: 0.8rem; letter-spacing: 1px;">REINA VALERA 1960</div>
-        </div>
-      `;
-    } else if (design === 2) {
-      // DISEÑO 2: MODERNO (Izquierda, Centrado verticalmente con Degradado lateral)
-      card.style.alignItems = 'center';
-      card.style.justifyContent = 'flex-start';
-
-      contentHtml = `
-        <div style="position: absolute; top:0; left:0; right:0; bottom:0; background: linear-gradient(to right, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.4) 70%, transparent 100%); z-index: 1; border-radius: 24px;"></div>
-        <div id="vod-content" style="z-index: 2; position: relative; text-align: left; width: 90%;">
-          <p style="font-size: ${fontSize - 0.15}rem; font-style: italic; line-height: 1.4; margin-bottom: 0.8rem; font-family: 'Playfair Display', serif; color: white;">"${this.currentVod.text}"</p>
-          <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <div style="width: 30px; height: 2px; background: var(--accent);"></div>
-            <div style="font-weight: 700; color: #fff; font-size: 0.95rem;">${this.currentVod.ref}</div>
-          </div>
-          <div style="font-weight: 800; color: var(--accent); font-size: 0.7rem; letter-spacing: 1px; margin-top: 0.25rem;">REINA VALERA 1960</div>
-        </div>
-      `;
-    } else if (design === 3) {
-      // DISEÑO 3: ELEGANT BOX (Caja oscura resaltada)
-      card.style.alignItems = 'center';
-      card.style.justifyContent = 'center';
-
-      contentHtml = `
-        <div id="vod-content" style="z-index: 2; position: relative; background: rgba(0, 0, 0, 0.75); border: 1px solid rgba(255,255,255,0.1); padding: 1.75rem; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); width: 92%; margin: 0 auto; text-align: center;">
-          <div style="font-weight: 800; letter-spacing: 2px; text-transform: uppercase; font-size: 0.65rem; margin-bottom: 0.5rem; opacity: 0.7; color: white;">${this.currentVod.thematic || ''}</div>
-          <p style="font-size: ${fontSize - 0.15}rem; font-style: italic; line-height: 1.5; margin-bottom: 1.25rem; font-family: 'Playfair Display', serif; color: white;">"${this.currentVod.text}"</p>
-          <div style="font-weight: 700; color: var(--accent); font-size: 0.95rem; margin-bottom: 0.2rem;">${this.currentVod.ref}</div>
-          <div style="font-weight: 400; color: rgba(255,255,255,0.5); font-size: 0.7rem; letter-spacing: 1px;">REINA VALERA 1960</div>
-        </div>
-      `;
+    const shareCard = document.querySelector('#vod-share-card');
+    if (shareCard && shareCard.offsetParent !== null) {
+      shareCard.style.backgroundImage = `url('${this.currentVodBg}')`;
+      this.updateVodUIInTarget(shareCard);
     }
-
-    card.innerHTML = contentHtml;
   }
+
   async generateVerseCanvas() {
     return new Promise((resolve, reject) => {
       const canvas = document.createElement('canvas');
@@ -4355,33 +4745,28 @@ class App {
       const ctx = canvas.getContext('2d');
 
       const img = new Image();
-      // Si empieza con 'data:' o ya es una URL absoluta, usarla como está; sino, añadir origin.
       img.src = this.currentVodBg.startsWith('data:') ? this.currentVodBg : (window.location.origin + this.currentVodBg);
       img.crossOrigin = "anonymous";
       img.onload = () => {
         try {
           const design = this.currentVodDesign;
 
-          // 1. Dibujar el fondo
           ctx.drawImage(img, 0, 0, 1080, 1080);
 
-          // 2. Dibujar superposiciones según el diseño
           if (design === 1) {
             ctx.fillStyle = 'rgba(0,0,0,0.48)';
             ctx.fillRect(0, 0, 1080, 1080);
           } else if (design === 2) {
-            const grad = ctx.createLinearGradient(0, 0, 1080, 0); // Degradado de izquierda a derecha
+            const grad = ctx.createLinearGradient(0, 0, 1080, 0);
             grad.addColorStop(0, 'rgba(0,0,0,0.95)');
             grad.addColorStop(0.6, 'rgba(0,0,0,0.4)');
             grad.addColorStop(1, 'rgba(0,0,0,0.1)');
             ctx.fillStyle = grad;
-
             ctx.fillRect(0, 0, 1080, 1080);
           } else if (design === 3) {
             ctx.fillStyle = 'rgba(0,0,0,0.15)';
             ctx.fillRect(0, 0, 1080, 1080);
 
-            // Caja oscura centrada
             const boxW = 940;
             const boxH = 680;
             const boxX = (1080 - boxW) / 2;
@@ -4390,15 +4775,49 @@ class App {
             ctx.fillStyle = 'rgba(0,0,0,0.78)';
             this.drawRoundedRect(ctx, boxX, boxY, boxW, boxH, 40);
             ctx.fill();
-            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+            ctx.strokeStyle = 'rgba(255,255,255,0.18)';
             ctx.lineWidth = 2;
             ctx.stroke();
           }
 
+          const isVod = this.currentVod.isVod !== false;
+          const thematic = isVod ? (this.currentVod.thematic || 'PROMESAS').toUpperCase().trim() : '';
+
+          ctx.save();
+          ctx.fillStyle = 'rgba(255,255,255,0.92)';
+          ctx.font = '800 28px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+
+          if (isVod) {
+            ctx.fillText('✨ VERSÍCULO DEL DÍA', 110, 110);
+            if (thematic) {
+              ctx.font = '800 24px sans-serif';
+              const textMetrics = ctx.measureText(thematic);
+              const badgeW = textMetrics.width + 44;
+              const badgeH = 46;
+              const badgeX = 1080 - 110 - badgeW;
+              const badgeY = 110 - 23;
+
+              ctx.fillStyle = 'rgba(255,255,255,0.22)';
+              this.drawRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 23);
+              ctx.fill();
+              ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+
+              ctx.fillStyle = '#ffffff';
+              ctx.textAlign = 'center';
+              ctx.fillText(thematic, badgeX + badgeW / 2, 110);
+            }
+          } else {
+            ctx.fillText('VERSÍCULO QUE CAMBIA VIDAS', 110, 110);
+          }
+          ctx.restore();
+
           ctx.fillStyle = 'white';
           ctx.textBaseline = 'middle';
 
-          // Configurar fuente dinámica para exportación (Alta Calidad)
           let fontSize = 56;
           const textLength = this.currentVod.text.length;
           if (textLength > 200) fontSize = 44;
@@ -4411,7 +4830,6 @@ class App {
           }
           ctx.font = `italic ${fontSize}px ${fontName}`;
 
-          // Procesar texto
           const words = `"${this.currentVod.text}"`.split(' ');
           let line = '';
           let lines = [];
@@ -4429,7 +4847,6 @@ class App {
           }
           lines.push(line);
 
-          // Calcular posición Y inicial
           let startY;
           if (design === 2) {
             ctx.textAlign = 'left';
@@ -4439,33 +4856,38 @@ class App {
             startY = 540 - (lines.length * fontSize * 1.3) / 2;
           }
 
-          // Dibujar líneas de texto
           lines.forEach((l, i) => {
             const xPos = design === 2 ? 110 : 540;
             ctx.fillText(l.trim(), xPos, startY + (i * fontSize * 1.3));
           });
 
-          // Referencia y Marca de Agua
           if (design === 2) {
             const refY = startY + (lines.length * fontSize * 1.3) + 40;
-            ctx.fillStyle = '#c29958'; // Color accent aprox
+
+            ctx.fillStyle = '#c29958';
             ctx.fillRect(110, refY - 24, 60, 4);
+
             ctx.fillStyle = 'white';
             ctx.font = 'bold 48px sans-serif';
             ctx.fillText(this.currentVod.ref.toUpperCase(), 190, refY);
 
-            ctx.fillStyle = 'rgba(255,255,255,0.6)';
-            ctx.font = '30px sans-serif';
-            ctx.fillText('BIBLIA CRISTIANA RV1960', 110, 1020);
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.font = '28px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('BIBLIA CRISTIANA RV1960', 110, 1038);
+
           } else {
-            const refY = startY + (lines.length * fontSize * 1.3) + 80;
+            const refY = startY + (lines.length * fontSize * 1.3) + 60;
+
             ctx.fillStyle = '#c29958';
             ctx.font = 'bold 48px sans-serif';
+            ctx.textAlign = 'center';
             ctx.fillText(this.currentVod.ref.toUpperCase(), 540, refY);
 
-            ctx.fillStyle = 'rgba(255,255,255,0.6)';
-            ctx.font = '30px sans-serif';
-            ctx.fillText('BIBLIA CRISTIANA RV1960', 540, 1020);
+            // Marca de agua
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.font = '28px sans-serif';
+            ctx.fillText('BIBLIA CRISTIANA RV1960', 540, 1038);
           }
 
           resolve(canvas);
@@ -4619,7 +5041,7 @@ class App {
 
   handleAboutClick() {
     this.aboutClickCount++;
-    if (this.aboutClickCount >= 5) {
+    if (this.aboutClickCount >= 3) {
       this.aboutClickCount = 0;
       this.openLoveModal();
     }
@@ -4630,12 +5052,64 @@ class App {
 
   openLoveModal() {
     const modal = document.querySelector('#love-modal');
-    if (modal) modal.classList.add('active');
+    if (!modal) return;
+
+    modal.classList.add('active');
+    this.createLoveParticles();
+    this.refreshIcons();
+
+    const box = document.querySelector('#love-modal-box') || modal.querySelector('.love-modal-box');
+    const indicator = document.querySelector('#love-scroll-indicator');
+
+    if (box) {
+      box.scrollTop = 0;
+
+      const updateScrollIndicator = () => {
+        if (!indicator) return;
+        const isAtBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 20;
+        if (isAtBottom || box.scrollHeight <= box.clientHeight) {
+          indicator.classList.add('hidden');
+        } else {
+          indicator.classList.remove('hidden');
+        }
+      };
+
+      box.onscroll = updateScrollIndicator;
+      setTimeout(updateScrollIndicator, 120);
+    }
+  }
+
+  scrollLoveModalDown() {
+    const box = document.querySelector('#love-modal-box') || document.querySelector('.love-modal-box');
+    if (box) {
+      box.scrollBy({ top: 200, behavior: 'smooth' });
+    }
   }
 
   closeLoveModal() {
     const modal = document.querySelector('#love-modal');
     if (modal) modal.classList.remove('active');
+    const container = document.querySelector('#love-particles-container');
+    if (container) container.innerHTML = '';
+  }
+
+  createLoveParticles() {
+    const container = document.querySelector('#love-particles-container');
+    if (!container) return;
+    container.innerHTML = '';
+    const emojis = ['💖', '🌸', '💕', '🌺', '🌹', '💘', '💐', '✨', '❤️', '🌷'];
+    const particleCount = 24;
+
+    for (let i = 0; i < particleCount; i++) {
+      const particle = document.createElement('span');
+      particle.className = 'love-particle';
+      particle.innerText = emojis[Math.floor(Math.random() * emojis.length)];
+      particle.style.left = `${Math.random() * 92 + 4}%`;
+      particle.style.fontSize = `${1.2 + Math.random() * 1.2}rem`;
+      particle.style.animationDuration = `${3.5 + Math.random() * 3.5}s`;
+      particle.style.animationDelay = `${Math.random() * 2.5}s`;
+      container.appendChild(particle);
+    }
   }
   async toggleTTS(book, chapter) {
     if (this.isSpeaking) {
@@ -4688,6 +5162,7 @@ class App {
     this.isSpeaking = true;
     this.isPaused = false;
     this.updateTTSButton();
+    this.openTTSDialog();
     this.playNextChunk();
   }
 
@@ -4706,9 +5181,18 @@ class App {
     if (chunk.type === 'verse' && chunk.vNum) {
       this.highlightReadingVerse(chunk.vNum);
     } else {
-      // If title or pericope, maybe clear highlight or keep previous?
-      // Better to clear or subtle highlight. Let's clear for now.
       this.clearReadingHighlight();
+      if (this.isTTSDialogOpen()) {
+        if (chunk.type === 'title') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else if (chunk.type === 'pericope' && this.currentVerseIndex + 1 < this.currentChapterVerses.length) {
+          const nextChunk = this.currentChapterVerses[this.currentVerseIndex + 1];
+          if (nextChunk && nextChunk.vNum) {
+            const el = document.getElementById(`v-${nextChunk.vNum}`);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      }
     }
 
     const Capacitor = window.Capacitor;
@@ -4742,13 +5226,21 @@ class App {
     }
   }
 
+  isTTSDialogOpen() {
+    const dialog = document.getElementById('tts-dialog');
+    if (!dialog) return false;
+    const computedDisplay = window.getComputedStyle(dialog).display;
+    return dialog.style.display === 'flex' || computedDisplay !== 'none';
+  }
+
   highlightReadingVerse(vNum) {
     this.clearReadingHighlight();
     const el = document.getElementById(`v-${vNum}`);
     if (el) {
       el.classList.add('reading-active');
-      // Optional: Auto-scroll to active verse?
-      // el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (this.isTTSDialogOpen()) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
   }
 
@@ -4761,8 +5253,6 @@ class App {
     if (this.currentVerseIndex + 1 < this.currentChapterVerses.length) {
       await this.stopTTSUtils();
       this.currentVerseIndex++;
-      // Adjust index to point to next 'verse' type if currently on pericope? 
-      // For simplicity, just next chunk.
       this.isPaused = false;
       this.updateTTSButton();
       this.playNextChunk();
@@ -4775,7 +5265,6 @@ class App {
     if (this.currentVerseIndex > 0) {
       await this.stopTTSUtils();
       this.currentVerseIndex--;
-      // Simple prev chunk logic.
       if (this.currentVerseIndex < 0) this.currentVerseIndex = 0;
 
       this.isPaused = false;
@@ -4797,6 +5286,22 @@ class App {
     const dialog = document.getElementById('tts-dialog');
     if (dialog) dialog.style.display = 'flex';
     this.updateTTSDialogUI();
+
+    // Auto-scroll to current active reading verse when opening control dialog
+    if (this.isSpeaking && this.currentChapterVerses && this.currentVerseIndex < this.currentChapterVerses.length) {
+      const chunk = this.currentChapterVerses[this.currentVerseIndex];
+      let vNumToScroll = null;
+      if (chunk && chunk.type === 'verse' && chunk.vNum) {
+        vNumToScroll = chunk.vNum;
+      } else if (this.currentVerseIndex + 1 < this.currentChapterVerses.length) {
+        const nextChunk = this.currentChapterVerses[this.currentVerseIndex + 1];
+        if (nextChunk && nextChunk.vNum) vNumToScroll = nextChunk.vNum;
+      }
+      if (vNumToScroll) {
+        const el = document.getElementById(`v-${vNumToScroll}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
   }
 
   closeTTSDialog() {
@@ -5258,7 +5763,7 @@ class App {
       // Evitar duplicación del prefijo si ya viene en el filename
       const path = filename.startsWith('biblia-cristiana-rv1960-app/') ? filename : `biblia-cristiana-rv1960-app/${filename}`;
       const response = await fetch(`https://dataconnect-kohl.vercel.app/${path}`);
-      if (!response.ok) throw new Error();
+      if (!response.ok) throw new Error("No encontrado");
       const data = await response.json();
 
       if (type === 'preguntas') this.renderPreguntaDetail(data);
@@ -5446,7 +5951,9 @@ class App {
 
   renderDevotionalFavorites() {
     this.currentView = 'devotional-favorites';
-    const favs = this.db.devotionalFavorites;
+    const favs = this.db.devotionalFavorites
+      .map((f, i) => ({ ...f, originalIndex: i }))
+      .filter(f => !f.isDeleted);
 
     const html = `
       <header>
@@ -5490,6 +5997,7 @@ class App {
       () => {
         this.db.deleteDevotionalFavorite(index);
         this.renderDevotionalFavorites();
+
       }
     );
   }

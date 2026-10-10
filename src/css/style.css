@@ -452,6 +452,33 @@ body {
   color: var(--accent);
 }
 
+.splash-verse-box {
+  margin-top: 1.2rem;
+  text-align: center;
+  max-width: 300px;
+  padding: 0 1.2rem;
+  animation: fadeIn 1.2s ease;
+}
+
+.splash-verse {
+  font-family: 'Playfair Display', serif;
+  font-size: 1rem;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--text-main);
+  opacity: 0.9;
+  margin: 0;
+}
+
+.splash-ref {
+  display: block;
+  margin-top: 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: 1.5px;
+}
+
 @keyframes pulse {
   0% {
     transform: scale(1);
@@ -683,7 +710,7 @@ header {
 
 header h1 {
   font-family: 'Playfair Display', serif;
-  font-size: 1.6rem;
+  font-size: 1.35rem;
   font-weight: 700;
   letter-spacing: -0.5px;
   margin: 0;
@@ -867,6 +894,7 @@ header h1 {
   display: flex;
   gap: 1rem;
   position: relative;
+  scroll-margin-top: 130px;
 }
 
 .verse-item.selected,
@@ -1345,48 +1373,279 @@ header h1 {
   transform: scale(0.95);
 }
 
-/* Love Modal (Easter Egg) */
-.love-modal .modal-box {
-  background: #fff5f7 !important;
-  background-image: linear-gradient(135deg, #fff5f7 0%, #ffe4e9 100%) !important;
-  border: 1px solid #ffb6c1 !important;
-  color: #4a1d24 !important;
-  box-shadow: 0 20px 60px rgba(214, 51, 132, 0.2) !important;
+/* Love Modal & Floating Particles (Easter Egg) */
+.love-particles-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
 }
 
-.love-modal .modal-title {
-  color: #d63384 !important;
+.love-particle {
+  position: absolute;
+  bottom: -40px;
+  opacity: 0;
+  user-select: none;
+  animation: floatUpLove linear infinite;
+  filter: drop-shadow(0 2px 6px rgba(214, 51, 132, 0.3));
+}
+
+@keyframes floatUpLove {
+  0% {
+    transform: translateY(0) scale(0.6) rotate(0deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.9;
+  }
+  85% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-105vh) scale(1.2) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+.love-modal .love-modal-box {
+  background: linear-gradient(145deg, #fff0f4 0%, #ffe4ec 50%, #ffd6e0 100%) !important;
+  border: 1.5px solid #ffb3c6 !important;
+  color: #4a1224 !important;
+  box-shadow: 0 20px 60px rgba(214, 51, 132, 0.3) !important;
+  border-radius: 28px !important;
+  padding: 1.6rem 1.4rem !important;
+  max-height: 85vh;
+  overflow-y: auto;
+  position: relative;
+  z-index: 2;
+  text-align: left;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.love-modal .love-modal-box::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.love-scroll-indicator {
+  position: sticky;
+  bottom: 1.2rem;
+  margin: 0 auto -40px auto;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #e91e63;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(233, 30, 99, 0.35);
+  box-shadow: 0 8px 22px rgba(214, 51, 132, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 20;
+  transition: opacity 0.35s ease, transform 0.35s ease, visibility 0.35s ease;
+  animation: loveIndicatorBounce 1.8s infinite ease-in-out;
+}
+
+.love-scroll-indicator.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(12px);
+}
+
+@keyframes loveIndicatorBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(6px);
+  }
+}
+
+.love-modal-header {
   text-align: center;
+  margin-bottom: 1.2rem;
 }
 
-.love-modal .bible-verse {
-  background: rgba(255, 255, 255, 0.5);
-  border-radius: 12px;
-  padding: 1rem;
-  margin-bottom: 0.75rem;
-  font-size: 0.95rem;
-  line-height: 1.5;
-  border-left: 4px solid #d63384;
-  color: #4a1d24;
+.love-header-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #d63384;
+  background: rgba(255, 255, 255, 0.75);
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  border: 1px solid rgba(214, 51, 132, 0.25);
+  margin-bottom: 0.5rem;
+}
+
+.love-modal-title {
+  color: #c2185b !important;
+  font-family: 'Playfair Display', serif;
+  font-size: 1.5rem !important;
+  font-weight: 800;
+  margin: 0;
+}
+
+.love-verses-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.2rem;
+}
+
+.love-verse-card {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 0.85rem 1rem;
+  border-left: 4px solid #e91e63;
+  box-shadow: 0 4px 12px rgba(214, 51, 132, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: transform 0.2s ease;
+}
+
+.love-verse-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #e91e63;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.love-verse-text {
+  font-family: 'Playfair Display', serif;
+  font-size: 0.96rem;
+  font-style: italic;
+  line-height: 1.45;
+  color: #4a1224;
+  margin: 0;
+}
+
+.love-dedication-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 228, 236, 0.85));
+  border: 1.5px dashed #f48fb1;
+  border-radius: 20px;
+  padding: 1.2rem 1.1rem;
+  text-align: center;
+  margin-top: 0.5rem;
+  position: relative;
+  box-shadow: 0 6px 18px rgba(214, 51, 132, 0.1);
+}
+
+.dedication-heart-icon {
+  font-size: 1.8rem;
+  margin-bottom: 0.3rem;
+  animation: pulse 1.8s infinite;
 }
 
 .love-modal .dedication {
   font-family: 'Playfair Display', serif;
   font-style: italic;
-  font-size: 1.15rem;
-  line-height: 1.7;
-  margin-top: 1.5rem;
-  color: #4a1d24;
-  text-align: center;
+  font-size: 1.05rem;
+  line-height: 1.65;
+  color: #5c192d;
+  margin: 0;
 }
 
 .love-modal .close-love {
-  background: #d63384 !important;
+  background: linear-gradient(135deg, #e91e63 0%, #c2185b 100%) !important;
   color: white !important;
   width: 100%;
-  margin-top: 1.5rem;
+  margin-top: 1.2rem;
+  padding: 0.85rem;
+  border-radius: 16px;
   font-weight: 800;
   letter-spacing: 1px;
+  border: none;
+  box-shadow: 0 6px 20px rgba(233, 30, 99, 0.35);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.love-modal .close-love:active {
+  transform: scale(0.96);
+}
+
+/* Dictionary Modal & Word Cards */
+.dict-modal .dict-modal-box {
+  background: var(--bg-color);
+  background-image: var(--bg-gradient);
+  border: 1px solid var(--glass-border);
+  border-radius: 28px;
+  padding: 1.75rem 1.4rem;
+  max-width: 460px;
+  width: 100%;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35);
+  position: relative;
+  max-height: 85vh;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.dict-modal .dict-modal-box::-webkit-scrollbar {
+  display: none;
+}
+
+.dict-word-card {
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 18px;
+  padding: 1rem 1.2rem;
+  margin-bottom: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow);
+}
+
+.dict-word-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.dict-word-card:active {
+  transform: scale(0.97);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.dict-word-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+  min-width: 0;
+  padding-right: 0.5rem;
+}
+
+.dict-word-term {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.dict-word-preview {
+  font-size: 0.85rem;
+  color: var(--text-main);
+  opacity: 0.7;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* Toast Notifications */
@@ -2357,6 +2616,7 @@ input:checked+.slider:before {
 }
 
 /* --- FLOATING NAVIGATION DOCK --- */
+/* --- FLOATING NAVIGATION DOCK --- */
 .floating-nav {
   position: fixed;
   bottom: 0.8rem;
@@ -2373,7 +2633,7 @@ input:checked+.slider:before {
   display: flex;
   gap: 0;
   align-items: center;
-  transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+  transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1), bottom 0.4s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.4s ease;
   width: 94%;
   max-width: 420px;
   justify-content: space-around;
@@ -2396,6 +2656,7 @@ input:checked+.slider:before {
 .floating-nav.hidden {
   bottom: -5rem;
   opacity: 0;
+  pointer-events: none;
 }
 
 .nav-item {
@@ -2411,10 +2672,13 @@ input:checked+.slider:before {
   font-size: 0.6rem;
   font-weight: 700;
   gap: 3px;
-  transition: all 0.3s ease;
+  transition: background-color 0.25s ease, color 0.25s ease, opacity 0.25s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   flex: 1;
   min-width: 0;
   text-align: center;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .nav-item span {
@@ -2424,10 +2688,15 @@ input:checked+.slider:before {
   width: 100%;
 }
 
+.nav-item:active {
+  transform: scale(0.92);
+}
+
 .nav-item.active {
   background: var(--accent-soft);
   color: var(--accent);
   opacity: 1;
+  transform: scale(1.05);
 }
 
 /* Home refinements */
@@ -2920,4 +3189,444 @@ input, textarea, [contenteditable="true"], .ql-editor {
   background: #ef4444 !important;
   color: white !important;
   border: none !important;
+}
+
+/* Auth Modal Styles */
+.auth-box {
+    border: none;
+    background: var(--bg-color);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+[data-mode="dark"] .auth-box {
+    background: var(--bg-gradient);
+}
+
+.auth-provider-btn {
+    display: flex;
+    flex-direction: row !important;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 0.8rem !important;
+    background: white !important;
+    color: #333 !important;
+    border-radius: 12px;
+    transition: all 0.2s;
+    border: 1px solid #ddd;
+    width: 100%;
+}
+
+.auth-provider-btn:hover {
+    background: #f8f9fa !important;
+    transform: translateY(-2px);
+}
+
+.modal-input {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border-radius: 12px;
+    border: 1px solid var(--glass-border);
+    background: var(--card-bg);
+    color: var(--text-main);
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    transition: all 0.2s;
+}
+
+.modal-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.auth-view-welcome h2 {
+    font-family: 'Playfair Display', serif;
+}
+
+#auth-error {
+    background: rgba(239, 68, 68, 0.1);
+    padding: 0.8rem;
+    border-radius: 8px;
+    border-left: 4px solid #ef4444;
+}
+
+/* User Profile in Sidebar/Settings */
+.sidebar-user-card {
+    margin-top: auto;
+    padding: 1rem;
+    background: var(--accent-soft);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sidebar-user-card:hover {
+    background: rgba(var(--accent-rgb), 0.2);
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+}
+
+/* Profile Modal Styles */
+.profile-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1rem 0;
+}
+
+.profile-avatar-container {
+    position: relative;
+    width: 120px;
+    height: 120px;
+}
+
+.profile-avatar {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid var(--accent-soft);
+    background: var(--card-bg);
+}
+
+.avatar-edit-btn {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    background: var(--accent);
+    color: white;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid var(--bg-color);
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.avatar-edit-btn:hover {
+    transform: scale(1.1);
+}
+
+.profile-info {
+    text-align: center;
+}
+
+.profile-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    font-family: 'Playfair Display', serif;
+}
+
+.profile-email {
+    opacity: 0.6;
+    font-size: 0.9rem;
+}
+
+.avatar-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-top: 5px;
+}
+
+.avatar-option {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    overflow: hidden;
+    cursor: pointer;
+    border: 3px solid transparent;
+    transition: transform 0.2s, border-color 0.2s;
+    background: var(--card-bg);
+}
+
+.avatar-option img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.avatar-option:hover {
+    transform: scale(1.1);
+    border-color: var(--accent-soft);
+}
+
+.avatar-option.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 10px var(--accent-soft);
+}
+
+.auth-label {
+    display: block;
+    text-align: left;
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+    opacity: 0.6;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.auth-input-group {
+    margin-bottom: 1.25rem;
+}
+
+/* Versículo del Día - Rediseño VOD y Compartir */
+#vod-card {
+  width: 100%;
+  height: 380px;
+  min-height: 380px;
+  border-radius: 28px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  position: relative;
+  transition: background-image 0.3s ease;
+  background-size: cover;
+  background-position: center;
+  border: none !important;
+  display: flex;
+}
+
+.vod-controls-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.vod-control-card {
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 0.95rem 1.1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.vod-control-title {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.7rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.vod-bg-thumb {
+  width: 58px;
+  height: 58px;
+  min-width: 58px;
+  border-radius: 14px;
+  background-size: cover;
+  background-position: center;
+  border: 2.5px solid transparent;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.vod-bg-thumb.active {
+  border-color: var(--accent) !important;
+  transform: scale(1.06);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+}
+
+.vod-segmented-control {
+  display: flex;
+  background: var(--accent-soft);
+  padding: 4px;
+  border-radius: 16px;
+  gap: 3px;
+  border: 1px solid var(--glass-border);
+  width: 100%;
+}
+
+.vod-segment-btn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.6rem 0.2rem;
+  border-radius: 12px;
+  border: none;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: transparent;
+  color: var(--text-main);
+  opacity: 0.65;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.vod-segment-btn svg,
+.vod-segment-btn i {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.vod-segment-btn.active {
+  background: var(--card-bg);
+  color: var(--accent);
+  opacity: 1;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+}
+
+.vod-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.vod-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.8rem 0.4rem;
+  border-radius: 16px;
+  font-weight: 800;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+  border: none;
+  min-height: 46px;
+}
+
+.vod-action-btn svg,
+.vod-action-btn i {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.vod-action-btn.secondary {
+  background: var(--card-bg);
+  color: var(--accent);
+  border: 1.5px solid var(--glass-border);
+  box-shadow: var(--shadow);
+}
+
+.vod-action-btn.primary {
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+
+.vod-action-btn:active {
+  transform: scale(0.96);
+}
+
+/* Modal de Diseño y Compartir VOD (bottom sheet) */
+.vod-share-modal-overlay {
+  align-items: flex-end !important;
+  padding: 0 !important;
+}
+
+.vod-share-modal-overlay.active {
+  display: flex;
+}
+
+.vod-share-modal-box {
+  width: 100%;
+  max-width: 540px;
+  background: var(--bg-color);
+  border-radius: 28px 28px 0 0;
+  padding: 1.25rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: slideUpSheet 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 -8px 40px rgba(0,0,0,0.18);
+}
+
+@keyframes slideUpSheet {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.vod-share-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.25rem;
+}
+
+.vod-share-modal-title {
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--text-main);
+}
+
+.vod-share-close-btn {
+  background: var(--accent-soft);
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.vod-share-close-btn:active {
+  background: var(--accent);
+  color: white;
+}
+
+.vod-share-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.vod-share-section-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.vod-share-bg-row {
+  display: flex;
+  overflow-x: auto;
+  gap: 0.65rem;
+  padding-bottom: 0.25rem;
+  scrollbar-width: none;
 }

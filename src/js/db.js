@@ -20,7 +20,9 @@ export class BibleDB {
       tts_voice: 0,
       tts_voice_name: "",
       system_theme: false,
-      skip_verse_numbers: false
+      skip_verse_numbers: false,
+      sync_interval: 180000, // 3 min por defecto
+      bible_auto_update: true  // Actualizar textos bíblicos desde servidor al arrancar
     };
     const stored = JSON.parse(localStorage.getItem('bible_settings') || '{}');
 
@@ -41,12 +43,20 @@ export class BibleDB {
     // Migración general: asegurar fechas y campo pinned
     const migrateItem = (item) => {
       let itemChanged = false;
+      
+      // Intentar recuperar syncId desde uuid si éste existe (común en datos descargados de Appwrite)
       if (!item.syncId) {
-        item.syncId = crypto.randomUUID();
-        itemChanged = true;
+        if (item.uuid) {
+            item.syncId = item.uuid;
+            itemChanged = true;
+        } else {
+            item.syncId = crypto.randomUUID();
+            itemChanged = true;
+        }
       }
+      
       if (item.isDirty === undefined) {
-        item.isDirty = true; // Por defecto marcar como sucio si no tiene ID de sync
+        item.isDirty = true;
         itemChanged = true;
       }
       if (item.isDeleted === undefined) {
@@ -70,6 +80,7 @@ export class BibleDB {
 
     this.favorites.forEach(f => { if (migrateItem(f)) changed = true; });
     this.highlights.forEach(h => { if (migrateItem(h)) changed = true; });
+    
     this.notes.forEach(n => {
       if (migrateItem(n)) changed = true;
       if (n.title === undefined) {
@@ -82,7 +93,30 @@ export class BibleDB {
         changed = true;
       }
     });
+
     this.devotionalFavorites.forEach(d => { if (migrateItem(d)) changed = true; });
+
+    // --- Limpieza de duplicados locales ---
+    const deduplicate = (arr, getRef) => {
+        const seen = new Map();
+        const initialLen = arr.length;
+        // Iterar de atrás hacia adelante para poder hacer splice
+        for (let i = arr.length - 1; i >= 0; i--) {
+            if (arr[i].isDeleted) continue;
+            const ref = getRef(arr[i]);
+            if (seen.has(ref)) {
+                arr.splice(i, 1);
+            } else {
+                seen.set(ref, true);
+            }
+        }
+        if (arr.length !== initialLen) changed = true;
+    };
+
+    deduplicate(this.favorites, f => `${f.book}|${f.chapter}|${f.verse}`);
+    deduplicate(this.highlights, h => `${h.book}|${h.chapter}|${h.verse}`);
+    deduplicate(this.notes, n => `${n.book}|${n.chapter}|${n.verse}|${n.title}|${n.notes}`);
+    deduplicate(this.devotionalFavorites, d => d.titulo);
 
     if (changed) {
       this.saveAll();
@@ -105,16 +139,121 @@ export class BibleDB {
     localStorage.setItem('bible_sync_metadata', JSON.stringify(this.syncMetadata));
   }
 
+  // ── IndexedDB helpers ────────────────────────────────────────────────────
+  _openBibleIDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('BibleAppDB', 1);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('bible_data')) {
+          db.createObjectStore('bible_data');
+        }
+      };
+      req.onsuccess = (e) => resolve(e.target.result);
+      req.onerror = (e) => reject(e.target.error);
+    });
+  }
+
+  async _getFromIDB(key) {
+    try {
+      const db = await this._openBibleIDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('bible_data', 'readonly');
+        const req = tx.objectStore('bible_data').get(key);
+        req.onsuccess = (e) => resolve(e.target.result ?? null);
+        req.onerror = (e) => reject(e.target.error);
+      });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async _saveToIDB(key, value) {
+    try {
+      const db = await this._openBibleIDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('bible_data', 'readwrite');
+        const req = tx.objectStore('bible_data').put(value, key);
+        req.onsuccess = () => resolve(true);
+        req.onerror = (e) => reject(e.target.error);
+      });
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // ── Validación del JSON bíblico ──────────────────────────────────────────
+  _isValidBibleData(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+    const books = Object.keys(data);
+    if (books.length < 10) return false; // La Biblia tiene 66 libros; mínimo aceptable
+    // Verificar que al menos el primer libro tiene capítulos y versículos reales
+    const firstBook = data[books[0]];
+    if (!firstBook || typeof firstBook !== 'object') return false;
+    const chapters = Object.keys(firstBook);
+    if (chapters.length === 0) return false;
+    const firstChapter = firstBook[chapters[0]];
+    if (!firstChapter || typeof firstChapter !== 'object') return false;
+    const verses = Object.values(firstChapter);
+    if (verses.length === 0 || typeof verses[0] !== 'string' || verses[0].trim() === '') return false;
+    return true;
+  }
+
+  // ── Remote bible update (fire-and-forget, sin bucles) ───────────────────
+  async _fetchRemoteBibleUpdate() {
+    const REMOTE_URL = 'https://lifecodestudios.vercel.app/biblia-rv1960/bibles_rv1960.json';
+    try {
+      const resp = await fetch(REMOTE_URL, { cache: 'no-store' });
+      if (!resp.ok) return;
+      const data = await resp.json();
+
+      // Validar integridad antes de usar
+      if (!this._isValidBibleData(data)) {
+        console.warn('El archivo bíblico remoto está dañado o incompleto. No se aplicará.');
+        return;
+      }
+
+      // Guardar en IndexedDB con timestamp
+      await this._saveToIDB('bibles_rv1960', { data, downloadedAt: new Date().toISOString() });
+      // Actualizar en memoria para la sesión actual
+      this.bibleData = data;
+      // Notificar a la app
+      window.dispatchEvent(new CustomEvent('bible-data-updated'));
+    } catch (e) {
+      // Fallo silencioso: sin conexión, JSON inválido o error de servidor
+      console.warn('No se pudo actualizar el texto bíblico:', e.message);
+    }
+  }
+
+  // ── init ────────────────────────────────────────────────────────────────
   async init() {
     try {
-      const bResp = await fetch('./bibles_rv1960.json');
-      this.bibleData = await bResp.json();
+      // 1. Intentar cargar desde IndexedDB (versión descargada más reciente)
+      const cached = await this._getFromIDB('bibles_rv1960');
+      if (cached && cached.data && this._isValidBibleData(cached.data)) {
+        this.bibleData = cached.data;
+      } else {
+        // 2. Fallback al archivo empaquetado en la app
+        if (cached && cached.data) {
+          console.warn('Dato en IndexedDB inválido/corrupto. Usando archivo local empaquetado.');
+        }
+        const bResp = await fetch('./bibles_rv1960.json');
+        this.bibleData = await bResp.json();
+      }
+
       const dResp = await fetch('./dictionary.json');
       this.dictionaryData = await dResp.json();
       try {
         const pResp = await fetch('./pericopes.json');
         if (pResp.ok) this.pericopesData = await pResp.json();
       } catch (e) { console.warn("Pericopes not found, ignoring."); }
+
+      // 3. Actualización en segundo plano si hay internet y el usuario lo permitió
+      const autoUpdate = this.settings.bible_auto_update !== false; // true por defecto
+      if (navigator.onLine && autoUpdate) {
+        this._fetchRemoteBibleUpdate(); // Fire-and-forget, sin await
+      }
+
       return true;
     } catch (e) {
       console.error("Error loading bible data:", e);
@@ -319,7 +458,7 @@ export class BibleDB {
 
   isHighlighted(book, chapter, verse) {
     const id = `${book} ${chapter}:${verse}`;
-    return this.highlights.find(h => h.id === id);
+    return this.highlights.find(h => h.id === id && !h.isDeleted);
   }
 
   addHighlight(book, chapter, verse, text, color) {
@@ -364,7 +503,7 @@ export class BibleDB {
   }
 
   isDevotionalFavorite(titulo) {
-    return this.devotionalFavorites.some(f => f.titulo === titulo);
+    return this.devotionalFavorites.some(f => f.titulo === titulo && !f.isDeleted);
   }
 
   toggleDevotionalFavorite(data) {
@@ -538,7 +677,7 @@ export class BibleDB {
     return {
       version: "1.0",
       export_date: new Date().toISOString(),
-      app_version: "1.3.1",
+      app_version: "1.3.4",
       data: {
         favorites: this.favorites,
         notes: this.notes,

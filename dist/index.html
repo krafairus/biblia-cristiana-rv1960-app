@@ -29,21 +29,74 @@
             }
         })();
     </script>
-  <script type="module" crossorigin src="./assets/index-Cata7I9a.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-dvqwRfkZ.css">
+  <script type="module" crossorigin src="./assets/index-Buesqyth.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-By7dZZ0_.css">
 </head>
 
 <body>
     <div id="app">
         <div id="splash" class="splash-screen">
             <img src="./icon.png" alt="Logo" class="splash-logo">
-            <h2 class="splash-text">Abriendo Biblia...</h2>
+            <div class="splash-verse-box">
+                <p class="splash-verse">«Lámpara es a mis pies tu palabra, Y lumbrera a mi camino.»</p>
+                <span class="splash-ref">SALMOS 119:105</span>
+            </div>
         </div>
     </div>
 
     <!-- El modal de notas ha sido reemplazado por una vista a pantalla completa gestionada dinámicamente -->
 
-    <!-- Modal para Compartir -->
+    <!-- Modal de Diseño y Compartir (VOD) -->
+    <div id="vod-share-modal" class="modal-overlay vod-share-modal-overlay">
+        <div class="vod-share-modal-box">
+            <!-- Header -->
+            <div class="vod-share-modal-header">
+                <span class="vod-share-modal-title">Diseño y Compartir</span>
+                <button class="vod-share-close-btn" onclick="window.app.closeVodShareModal()">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+
+            <!-- Vista previa del versículo -->
+            <div id="vod-share-card"></div>
+
+            <!-- Selector de Fondo -->
+            <div class="vod-share-section">
+                <p class="vod-share-section-title"><i data-lucide="image"></i> Fondo</p>
+                <div id="vod-share-bg-selector" class="vod-share-bg-row"></div>
+                <input type="file" id="vod-share-custom-bg-input" accept="image/*" style="display:none"
+                    onchange="window.app.handleCustomBgChange(event)">
+            </div>
+
+            <!-- Selector de Diseño -->
+            <div class="vod-share-section">
+                <p class="vod-share-section-title"><i data-lucide="layout"></i> Estilo</p>
+                <div class="vod-segmented-control" id="vod-share-design-ctrl">
+                    <button class="vod-segment-btn active" onclick="window.app.changeVodDesign(1)">
+                        <i data-lucide="align-center"></i> Clásico
+                    </button>
+                    <button class="vod-segment-btn" onclick="window.app.changeVodDesign(2)">
+                        <i data-lucide="align-left"></i> Moderno
+                    </button>
+                    <button class="vod-segment-btn" onclick="window.app.changeVodDesign(3)">
+                        <i data-lucide="square-dashed-bottom-code"></i> Elegante
+                    </button>
+                </div>
+            </div>
+
+            <!-- Botones de Acción -->
+            <div class="vod-actions-grid">
+                <button class="vod-action-btn secondary" onclick="window.app.handleCopyVod()">
+                    <i data-lucide="copy"></i> Copiar Texto
+                </button>
+                <button class="vod-action-btn primary" onclick="window.app.shareVerse('image')">
+                    <i data-lucide="share-2"></i> Compartir Imagen
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Compartir (lector) -->
     <div id="share-modal" class="modal-overlay">
         <div class="modal-box" style="text-align: center;">
             <h2 class="modal-title">Compartir Versículo</h2>
@@ -76,36 +129,70 @@
 
     <!-- Modal Especial (Easter Egg) -->
     <div id="love-modal" class="modal-overlay love-modal">
-        <div class="modal-box" style="text-align: left; max-height: 85vh; overflow-y: auto;">
-            <div style="text-align: center; margin-bottom: 1.5rem;">
-                <h2 class="modal-title">1 Corintios 13:4-7</h2>
-                <div style="color: #d63384; font-size: 1.5rem; margin-top: 0.5rem;">❤</div>
+        <div id="love-particles-container" class="love-particles-container"></div>
+        <div class="modal-box love-modal-box" id="love-modal-box">
+            <div class="love-modal-header">
+                <div class="love-header-badge">🌸 EL AMOR NUNCA DEJA DE SER 💕</div>
+                <h2 class="love-modal-title">1 Corintios 13:4-7</h2>
             </div>
 
-            <div class="bible-verse">
-                <b>1 Corintios 13:4</b><br>
-                El amor es sufrido, es benigno; el amor no tiene envidia, el amor no es jactancioso, no se envanece;
-            </div>
-            <div class="bible-verse">
-                <b>1 Corintios 13:5</b><br>
-                no hace nada indebido, no busca lo suyo, no se irrita, no guarda rencor;
-            </div>
-            <div class="bible-verse">
-                <b>1 Corintios 13:6</b><br>
-                no se goza de la injusticia, mas se goza de la verdad.
-            </div>
-            <div class="bible-verse">
-                <b>1 Corintios 13:7</b><br>
-                Todo lo sufre, todo lo cree, todo lo espera, todo lo soporta.
+            <div class="love-verses-container">
+                <div class="love-verse-card">
+                    <span class="love-verse-badge">v.4</span>
+                    <p class="love-verse-text">«El amor es sufrido, es benigno; el amor no tiene envidia, el amor no es jactancioso, no se envanece;»</p>
+                </div>
+                <div class="love-verse-card">
+                    <span class="love-verse-badge">v.5</span>
+                    <p class="love-verse-text">«no hace nada indebido, no busca lo suyo, no se irrita, no guarda rencor;»</p>
+                </div>
+                <div class="love-verse-card">
+                    <span class="love-verse-badge">v.6</span>
+                    <p class="love-verse-text">«no se goza de la injusticia, mas se goza de la verdad.»</p>
+                </div>
+                <div class="love-verse-card">
+                    <span class="love-verse-badge">v.7</span>
+                    <p class="love-verse-text">«Todo lo sufre, todo lo cree, todo lo espera, todo lo soporta.»</p>
+                </div>
             </div>
 
-            <p class="dedication">
-                En dedicacion a la mujer que amo, katherine mi niña, que mi Dios te cuide siempre a donde vayas y que
-                nunca te apartes de su hermoso camino a la salvacion, estes donde estes siempre tendras un espacio en mi
-                corazon ❤
-            </p>
+            <div class="love-dedication-card">
+                <div class="dedication-heart-icon">💖</div>
+                <p class="dedication">
+                    En dedicatoria a la mujer que amo, Katherine mi niña, que mi Dios te cuide siempre a donde vayas y que nunca te apartes de su hermoso camino a la salvación. Estés donde estés, siempre tendrás un espacio en mi corazón. ❤
+                </p>
+            </div>
 
-            <button class="modal-btn close-love" onclick="window.app.closeLoveModal()">Cerrar</button>
+            <button class="modal-btn close-love" onclick="window.app.closeLoveModal()">🌸 Cerrar con Amor 💕</button>
+
+            <div id="love-scroll-indicator" class="love-scroll-indicator" onclick="window.app.scrollLoveModalDown()" title="Deslizar hacia abajo">
+                <i data-lucide="chevron-down"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Diccionario Bíblico -->
+    <div id="dict-word-modal" class="modal-overlay dict-modal">
+        <div class="modal-box dict-modal-box">
+            <button class="btn-icon dict-modal-close" onclick="window.app.closeDictWordModal()" title="Cerrar" style="position: absolute; right: 1.1rem; top: 1.1rem; color: var(--text-muted); background: var(--accent-soft); border-radius: 50%; width: 34px; height: 34px;">
+                <i data-lucide="x"></i>
+            </button>
+            <div class="dict-modal-header" style="text-align: center; margin-bottom: 1.25rem; padding-top: 0.5rem;">
+                <div class="dict-header-badge" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.72rem; font-weight: 800; letter-spacing: 1.5px; color: var(--accent); background: var(--accent-soft); padding: 0.3rem 0.85rem; border-radius: 20px; border: 1px solid var(--glass-border); margin-bottom: 0.6rem;">
+                    <i data-lucide="book-open"></i> DICCIONARIO BÍBLICO
+                </div>
+                <h2 id="dict-modal-term" class="dict-modal-title" style="color: var(--accent); font-family: 'Playfair Display', serif; font-size: 1.75rem; font-weight: 800; margin: 0; word-break: break-word;">Término</h2>
+            </div>
+            <div class="dict-modal-body" style="background: var(--card-bg); border: 1px solid var(--glass-border); border-radius: 20px; padding: 1.3rem 1.25rem; margin-bottom: 1.5rem; text-align: left; box-shadow: var(--shadow);">
+                <span style="display: block; font-size: 0.68rem; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 1.5px; margin-bottom: 0.6rem; opacity: 0.85;">
+                    Definición Bíblica
+                </span>
+                <p id="dict-modal-def" style="font-size: 1.05rem; line-height: 1.7; color: var(--text-main); margin: 0; font-family: Inter, sans-serif; font-weight: 400;">
+                    Cargando definición...
+                </p>
+            </div>
+            <button class="modal-btn primary" onclick="window.app.closeDictWordModal()" style="width: 100%; padding: 0.85rem; border-radius: 16px; font-weight: 800; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                <i data-lucide="check"></i> Entendido
+            </button>
         </div>
     </div>
     <!-- Barras de herramientas flotantes para Favoritos y Notas -->
@@ -135,6 +222,8 @@
             </div>
         </div>
     </div>
+
+
 
 
 

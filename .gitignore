@@ -18,3 +18,8 @@ android/app/src/main/assets/capacitor.config.json
 # Firebase / Data Connect
 dataconnect/
 android/build/
+RECOVERY_GUIDE.md
+recovery-web/
+*.jks
+*.env
+biblia-cristiana.jks
